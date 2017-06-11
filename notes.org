@@ -1,4 +1,4 @@
-Current issues
+Current issues with McCLIM
 
 * No word wrapping in application panes
 
@@ -11,3 +11,21 @@ Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/247][247]]
 * Application panes should reflow when windows are resized
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/250][250]]
+
+* Image transformations doesn't work at all
+
+Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/177][177]]
+
+This one requires a bit more consideration. The spec does explicitly
+say that the =:TRANSFORMATION= parameter is only used to affect the
+position of the image, not its geometry. However, it could be argued
+that the reason they said this was because at the time the spec was
+written, computers were not fast enough to perform image
+transformations in real time. This is not the case anymore.
+
+If one were to stick with the spec's definition, then
+=TRANSFORM-DESIGN= should be used, but there is not method to actually
+draw a transformed design.
+
+Thus it must be concluded that there is no way one can transform
+images in McCLIM at all.
