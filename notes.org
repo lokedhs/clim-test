@@ -24,8 +24,12 @@ written, computers were not fast enough to perform image
 transformations in real time. This is not the case anymore.
 
 If one were to stick with the spec's definition, then
-=TRANSFORM-DESIGN= should be used, but there is not method to actually
+=TRANSFORM-DESIGN= should be used, but there is no method to actually
 draw a transformed design.
 
 Thus it must be concluded that there is no way one can transform
 images in McCLIM at all.
+
+** When using INCREMENTAL-REDISPLAY, the pane doesn't resize correctly
+
+Logged as [[https://github.com/robert-strandh/McCLIM/issues/251][251]]
