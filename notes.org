@@ -32,4 +32,4 @@ images in McCLIM at all.
 
 ** When using INCREMENTAL-REDISPLAY, the pane doesn't resize correctly
 
-Logged as [[https://github.com/robert-strandh/McCLIM/issues/251][251]]
+Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/251][251]]
