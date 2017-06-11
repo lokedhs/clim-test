@@ -1,18 +1,18 @@
-Current issues with McCLIM
+* Current issues with McCLIM
 
-* No word wrapping in application panes
+** No word wrapping in application panes
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/249][249]]
 
-* No word wrapping in TEXT-EDITOR
+** No word wrapping in TEXT-EDITOR
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/247][247]]
 
-* Application panes should reflow when windows are resized
+** Application panes should reflow when windows are resized
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/250][250]]
 
-* Image transformations doesn't work at all
+** Image transformations doesn't work at all
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/177][177]]
 
