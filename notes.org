@@ -1,0 +1,13 @@
+Current issues
+
+* No word wrapping in application panes
+
+Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/249][249]]
+
+* No word wrapping in TEXT-EDITOR
+
+Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/247][247]]
+
+* Application panes should reflow when windows are resized
+
+Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/250][250]]
