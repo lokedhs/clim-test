@@ -1,5 +1,13 @@
 * Current issues with McCLIM
 
+This document outlines issues that I have had while developing the
+Mastodon client using CLIM. In my opinion, these are fundamental
+issues in that they are defects that a beginner would not expect to
+have to manually create workarounds for.
+
+Also, some of these issues doesn't even have reasonably easy
+workarounds. In particular the image transformation issue.
+
 ** No word wrapping in application panes
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/249][249]]
