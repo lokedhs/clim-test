@@ -44,3 +44,7 @@ Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/251][251]]
 ** BOUNDING-RECTANGLE-WIDTH should not include the width of the scrollbar
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/254][254]]
+
+This bug prevents a proper implementation of word wrapping, which
+means that there is no simple workaround for [[No word wrapping in
+application panes]]

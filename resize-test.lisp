@@ -10,7 +10,9 @@
   (:panes (content :application
                    :display-function 'display-content
                    :display-time t
-                   :incremental-redisplay t)
+                   :incremental-redisplay t
+                   :width :compute
+                   :height :compute)
           (interaction-pane :interactor))
   (:layouts (default content
                      interaction-pane)))
