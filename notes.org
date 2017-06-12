@@ -41,3 +41,6 @@ images in McCLIM at all.
 ** When using INCREMENTAL-REDISPLAY, the pane doesn't resize correctly
 
 Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/251][251]]
+** BOUNDING-RECTANGLE-WIDTH should not include the width of the scrollbar
+
+Logged as bug [[https://github.com/robert-strandh/McCLIM/issues/254][254]]
