@@ -80,6 +80,18 @@
 (defmethod sb-gray:stream-terpri ((stream word-wrap-stream))
   (%word-wrap-push-char stream #\Newline))
 
+(defmethod sb-gray:stream-line-column ((stream word-wrap-stream))
+  (%finalise-word-wrap-string stream)
+  (call-next-method))
+
+(defmethod sb-gray:stream-line-length ((stream word-wrap-stream))
+  (%finalise-word-wrap-string stream)
+  (call-next-method))
+
+(defmethod sb-gray:stream-fresh-line ((stream word-wrap-stream))
+  (%finalise-word-wrap-string stream)
+  (call-next-method))
+
 (defmethod clim-internals::invoke-with-sheet-medium-bound (continuation medium (sheet word-wrap-stream))
   (%finalise-word-wrap-string sheet)
   (clim-internals::invoke-with-sheet-medium-bound continuation medium (clim:encapsulating-stream-stream sheet)))
@@ -90,7 +102,8 @@
     `(let ((,stream-sym ,stream))
        (let ((,wrapped-stream-sym (make-instance 'word-wrap-stream :stream ,stream-sym)))
          (let ((,stream ,wrapped-stream-sym))
-           ,@body)))))
+           (progn ,@body)
+           (%finalise-word-wrap-string ,wrapped-stream-sym))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Test harness
