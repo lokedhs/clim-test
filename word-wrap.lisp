@@ -61,35 +61,31 @@
       for i from s below e
       do (%word-wrap-push-char stream (aref string i)))))
 
-(defmethod sb-gray:stream-write-char ((stream word-wrap-stream) char)
+(defmethod trivial-gray-streams:stream-write-char ((stream word-wrap-stream) char)
   (%word-wrap-push-char stream char))
 
-(defmethod sb-gray:stream-write-byte ((stream word-wrap-stream) char)
+(defmethod trivial-gray-streams:stream-write-byte ((stream word-wrap-stream) char)
   (error "Can't write binary data to word-wrap streams"))
 
-(defmethod sb-gray:stream-write-string ((stream word-wrap-stream) string &optional start end)
+(defmethod trivial-gray-streams:stream-write-string ((stream word-wrap-stream) string &optional start end)
   (%word-wrap-push-string stream string start end))
 
-(defmethod sb-gray:stream-write-sequence ((stream word-wrap-stream) string &optional start end)
+(defmethod trivial-gray-streams:stream-write-sequence ((stream word-wrap-stream) string start end &key &allow-other-keys)
   (declare (ignore start end))
   (error "Can't write binary data to word-wrap streams"))
 
-(defmethod sb-gray:stream-finish-output ((stream word-wrap-stream))
+(defmethod trivial-gray-streams:stream-finish-output ((stream word-wrap-stream))
   (%finalise-word-wrap-string stream)
   (call-next-method))
 
-(defmethod sb-gray:stream-terpri ((stream word-wrap-stream))
+(defmethod trivial-gray-streams:stream-terpri ((stream word-wrap-stream))
   (%word-wrap-push-char stream #\Newline))
 
-(defmethod sb-gray:stream-line-column ((stream word-wrap-stream))
+(defmethod trivial-gray-streams:stream-line-column ((stream word-wrap-stream))
   (%finalise-word-wrap-string stream)
   (call-next-method))
 
-(defmethod sb-gray:stream-line-length ((stream word-wrap-stream))
-  (%finalise-word-wrap-string stream)
-  (call-next-method))
-
-(defmethod sb-gray:stream-fresh-line ((stream word-wrap-stream))
+(defmethod trivial-gray-streams:stream-fresh-line ((stream word-wrap-stream))
   (%finalise-word-wrap-string stream)
   (call-next-method))
 
@@ -142,7 +138,9 @@
       for v in (foo-frame/content frame)
       for first = t then nil
       unless first
-        do (present-horizontal-separator stream)
+        do (progn
+             (finish-output stream)
+             (present-horizontal-separator stream))
       do (format stream "~a~%" v))))
 
 (define-foo-frame-command (add-string :name "Add")
