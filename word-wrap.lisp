@@ -75,7 +75,8 @@
   (error "Can't write binary data to word-wrap streams"))
 
 (defmethod sb-gray:stream-finish-output ((stream word-wrap-stream))
-  (%finalise-word-wrap-string stream))
+  (%finalise-word-wrap-string stream)
+  (call-next-method))
 
 (defmethod sb-gray:stream-terpri ((stream word-wrap-stream))
   (%word-wrap-push-char stream #\Newline))
