@@ -10,8 +10,32 @@
 ;;; Word-wrap implementation
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+#+sbcl
+(defun split-word (string)
+  (sb-unicode:words string))
+
+#-sbcl
+(defun split-word (string)
+  (when (plusp (length string))
+    (loop
+      with start = 0
+      with last-char-space-p = nil
+      with result = nil
+      for i from 0 below (length string)
+      for ch = (aref string i)
+      for space-p = (eql ch #\Space)
+      when (or space-p last-char-space-p)
+        do (progn
+             (when (< start i)
+              (push (subseq string start i) result))
+             (setq start i)
+             (setq last-char-space-p space-p))
+      finally (progn
+                (push (subseq string start) result)
+                (return (reverse result))))))
+
 (defun present-text-with-wordwrap (stream text)
-  (let ((words (sb-unicode:words text)))
+  (let ((words (split-word text)))
     (loop
       with pane-width = (clim:rectangle-width (clim:pane-viewport-region stream))
       for word in words
