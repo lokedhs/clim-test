@@ -23,7 +23,7 @@
       with result = nil
       for i from 0 below (length string)
       for ch = (aref string i)
-      for space-p = (eql ch #\Space)
+      for space-p = (cl-unicode:has-property ch "White_Space")
       when (or space-p last-char-space-p)
         do (progn
              (when (< start i)
