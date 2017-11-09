@@ -10,13 +10,25 @@
     (sb-ext:restrict-compiler-policy 'debug 3)
     #+nil(dolist (p (mapcar #'pathname-directory (directory #p"/home/emartenson/prog/McCLIM-gtk/**/*.asd")))
            (pushnew (make-pathname :directory p) asdf:*central-registry* :test #'equal))
+    #+nil
     (dolist (p (mapcar #'pathname-directory (directory #p"/home/emartenson/src/McCLIM-xkb/**/*.asd")))
       (pushnew (make-pathname :directory p) asdf:*central-registry* :test #'equal))
     (ql:quickload "mcclim")
-    #+nil(ql:quickload "mcclim-gtkairo")
+    #+nil(ql:quickload "mcclim-gtkairo"))
+  (unless (find-package "LOG4CL")
     (ql:quickload "log4cl")))
 
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
+
+(defclass update-application-pane (clim:application-pane)
+  ())
+
+(defvar *in-redraw* nil)
+
+(defmethod clim:note-sheet-region-changed :after ((sheet update-application-pane))
+  (unless *in-redraw*
+    (let ((*in-redraw* t))
+      (clim:redisplay-frame-pane (clim:pane-frame sheet) sheet))))
 
 (defclass text-content-view (clim:view)
   ())
@@ -28,14 +40,14 @@
             :accessor foo-frame/content))
   (:panes (text-content :application
                         :default-view 'text-content-view
-                        :display-function 'display-text-content)
+                        :display-function 'display-text-content
+                        :redisplay-on-resize-p t)
           (interaction-pane :interactor))
   (:layouts (default (clim:vertically ()
                        text-content
                        interaction-pane))))
 
-(defvar *in-redraw* nil)
-
+#+nil
 (defmethod clim:note-sheet-region-changed :after ((sheet clim:standard-output-recording-stream))
   (log:trace "CHANGE sheet = ~s" sheet)
   (if *in-redraw*
