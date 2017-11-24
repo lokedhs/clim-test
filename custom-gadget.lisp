@@ -132,8 +132,8 @@
       for line-start-pos = (clim:make-point left-margin y)
       if (= i cursor-line)
         do (let* ((s (subseq string 0 cursor-col))
-                  (cursor-pos (+ (clim:text-size medium s) left-margin)))
-             (clim:draw-text medium string line-start-pos)
+                  (cursor-pos (+ (clim:text-size medium s :text-style style) left-margin)))
+             (clim:draw-text medium string line-start-pos :text-style style)
              (clim:draw-line* medium
                               cursor-pos
                               (+ y cursor-margin)
