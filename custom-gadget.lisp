@@ -93,6 +93,9 @@
 (defun linebuffer-text-on-line (linebuffer row)
   (linebuffer-line/text (flexichain:element* (linebuffer/lines linebuffer) row)))
 
+(defun find-best-column-in-row (line col-index)
+  (min col-index (flexichain:nb-elements (linebuffer-line/text line))))
+
 (defun process-cursor-movement (linebuffer name)
   (with-accessors ((row linebuffer/row)
                    (col linebuffer/col))
@@ -114,7 +117,15 @@
                (setf col 0)
                (incf row))
              ;; ELSE: Not at the end of a line
-             (incf col)))))))
+             (incf col)))
+        (:up
+         (when (plusp row)
+           (setf col (find-best-column-in-row (flexichain:element* lines (1- row)) col))
+           (decf row)))
+        (:down
+         (when (< row (1- (flexichain:nb-elements lines)))
+           (setf col (find-best-column-in-row (flexichain:element* lines (1+ row)) col))
+           (incf row)))))))
 
 (defun repaint-linebuffer (linebuffer medium)
   (let ((lines (linebuffer/lines linebuffer)))
@@ -158,7 +169,6 @@
   (clim:make-space-requirement :width 300 :height 200))
 
 (defmethod clim:handle-repaint ((pane new-edit) region)
-  (format *out* "Repaint here~%")
   (clim:with-sheet-medium (medium pane)
     (clim:draw-rectangle medium (clim:make-point 0 0) (clim:make-point 300 300)
                          :ink (clim:make-rgb-color 1 1 1))
@@ -180,7 +190,6 @@
           (ch (clim:keyboard-event-character event))
           (name (clim:keyboard-event-key-name event)))
       (cond ((eq name :return)
-             (format *out* "blah~%")
              (linebuffer-insert-newline linebuffer)
              (repaint))
             ((member name '(:up :down :left :right))
