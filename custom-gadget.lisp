@@ -1,9 +1,10 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "CLIM")
-    (sb-ext:restrict-compiler-policy 'safety 3)
-    (sb-ext:restrict-compiler-policy 'debug 3)
+    #+sbcl
+    (progn
+      (sb-ext:restrict-compiler-policy 'safety 3)
+      (sb-ext:restrict-compiler-policy 'debug 3))
     (ql:quickload "mcclim")
-    (ql:quickload "receptacle")
     (ql:quickload "log4cl")))
 
 (defpackage :clim-test
@@ -18,8 +19,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defclass linebuffer-line ()
-  ((text :type flexichain:flexichain
-         :accessor linebuffer-line/text))
+  ((text          :type flexichain:flexichain
+                  :accessor linebuffer-line/text)
+   (output-record :type t
+                  :initform nil
+                  :accessor linebuffer-line/output-record))
   (:documentation "A single line in a linebuffer"))
 
 (defmethod initialize-instance :after ((obj linebuffer-line) &key text)
@@ -86,6 +90,58 @@
       (setf col 0)
       (setf row new-row-index))))
 
+(defun linebuffer-text-on-line (linebuffer row)
+  (linebuffer-line/text (flexichain:element* (linebuffer/lines linebuffer) row)))
+
+(defun process-cursor-movement (linebuffer name)
+  (with-accessors ((row linebuffer/row)
+                   (col linebuffer/col))
+      linebuffer
+    (let ((lines (linebuffer/lines linebuffer)))
+      (ecase name
+        (:left
+         (if (zerop col)
+             ;; We are at the beginning of the line
+             (when (plusp row)
+               (setf col (flexichain:nb-elements (linebuffer-text-on-line linebuffer (1- row))))
+               (decf row))
+             ;; ELSE: In the middle of the line, simply move the cursor
+             (decf col)))
+        (:right
+         (if (= col (flexichain:nb-elements (linebuffer-text-on-line linebuffer row)))
+             ;; We are at the end of the line
+             (when (< row (1- (flexichain:nb-elements lines)))
+               (setf col 0)
+               (incf row))
+             ;; ELSE: Not at the end of a line
+             (incf col)))))))
+
+(defun repaint-linebuffer (linebuffer medium)
+  (let ((lines (linebuffer/lines linebuffer)))
+    (loop
+      with style = (clim:make-text-style :sans-serif :roman nil)
+      with cursor-line = (linebuffer/row linebuffer)
+      with cursor-col = (linebuffer/col linebuffer)
+      with left-margin = 5
+      with cursor-margin = 2 ; The number of pixels the cursor should extend beyond the normal size of a character
+      for i from 0 below (flexichain:nb-elements lines)
+      for line = (flexichain:element* lines i)
+      for string = (linebuffer-line-content-as-text line)
+      for height = (clim:text-style-height style medium)
+      for y = (* height (1+ i))
+      for line-start-pos = (clim:make-point left-margin y)
+      if (= i cursor-line)
+        do (let* ((s (subseq string 0 cursor-col))
+                  (cursor-pos (+ (clim:text-size medium s) left-margin)))
+             (clim:draw-text medium string line-start-pos)
+             (clim:draw-line* medium
+                              cursor-pos
+                              (+ y cursor-margin)
+                              cursor-pos
+                              (- y height cursor-margin)))
+      else
+        do (clim:draw-text medium string line-start-pos :text-style style))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Test gadget
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -103,14 +159,10 @@
 
 (defmethod clim:handle-repaint ((pane new-edit) region)
   (format *out* "Repaint here~%")
-  (let ((content (linebuffer/lines (new-edit/linebuffer pane))))
-    (clim:with-sheet-medium (medium pane)
-      (clim:draw-rectangle medium (clim:make-point 0 0) (clim:make-point 300 300)
-                           :ink (clim:make-rgb-color 1 1 1))
-      (loop
-        for i from 0 below (flexichain:nb-elements content)
-        for line = (flexichain:element* content i)
-        do (clim:draw-text medium (linebuffer-line-content-as-text line) (clim:make-point 30 (* 10 (1+ i))))))))
+  (clim:with-sheet-medium (medium pane)
+    (clim:draw-rectangle medium (clim:make-point 0 0) (clim:make-point 300 300)
+                         :ink (clim:make-rgb-color 1 1 1))
+    (repaint-linebuffer (new-edit/linebuffer pane) medium)))
 
 (defmethod clim:handle-event ((pane new-edit) (event clim:pointer-button-event))
   (format *out* "Button click: ~a,~a~%"
@@ -124,16 +176,19 @@
           (clim:keyboard-event-character event))
   (labels ((repaint ()
              (clim:repaint-sheet pane (clim:make-rectangle (clim:make-point 0 0) (clim:make-point 300 300)))))
-    (let ((ch (clim:keyboard-event-character event)))
-      (case (clim:keyboard-event-key-name event)
-        (:return
-          (format *out* "blah~%")
-          (linebuffer-insert-newline (new-edit/linebuffer pane))
-          (repaint))
-        (t
-         (when (characterp ch)
-           (linebuffer-insert-string-at-cursor (new-edit/linebuffer pane) (string ch))
-           (repaint)))))))
+    (let ((linebuffer (new-edit/linebuffer pane))
+          (ch (clim:keyboard-event-character event))
+          (name (clim:keyboard-event-key-name event)))
+      (cond ((eq name :return)
+             (format *out* "blah~%")
+             (linebuffer-insert-newline linebuffer)
+             (repaint))
+            ((member name '(:up :down :left :right))
+             (process-cursor-movement linebuffer name)
+             (repaint))
+            ((characterp ch)
+             (linebuffer-insert-string-at-cursor linebuffer (string ch))
+             (repaint))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Test wrapper
