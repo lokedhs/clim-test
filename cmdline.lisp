@@ -12,13 +12,38 @@
   (unless (find-package "LOG4CL")
     (ql:quickload "log4cl")))
 
-(defclass maxima-interactor-view (clim:view)
+(clim:define-command-table maxima-commands)
+
+(defclass maxima-interactor-view (clim:textual-view)
   ())
+
+(defparameter +listener-view+ (make-instance 'maxima-interactor-view))
 
 (defclass maxima-interactor-pane (clim:interactor-pane)
   ())
 
-(defmethod stream-present :around ((stream maxima-interactor-pane) object type
+(clim:define-application-frame maxima-main-frame ()
+  ()
+  (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
+                                                    :name 'maxima-interactor
+                                                    :default-view +listener-view+))
+          (interaction-pane :interactor))
+  (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
+  (:command-table (maxima-main-frame :inherit-from (maxima-commands)))
+  (:layouts (default (clim:vertically ()
+                       text-content
+                       interaction-pane))))
+
+(defmethod clim:read-frame-command ((frame maxima-main-frame) &key (stream *standard-input*))
+  (log:info "reading input")
+  (multiple-value-bind (object type)
+      (let ((clim:*command-dispatchers* '(#\;)))
+        (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
+          (clim:accept 'string :stream stream :prompt nil :default "foo" :default-type 'string)))
+    (log:info "object=%s, type=%s" object type)
+    `(maxima-eval ,object)))
+
+(defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
                                    &key (single-box nil single-box-p) &allow-other-keys)
   (declare (ignore single-box single-box-p))
@@ -28,17 +53,10 @@
   (declare (ignore frame))
   (format stream "maxima> "))
 
-(clim:define-application-frame foo-frame ()
-  ()
-  (:panes (text-content (clim:make-clim-stream-pane :type 'maxima-interactor-pane
-                                                    :name 'maxima-interactor
-                                                    :default-view 'maxima-interactor-view))
-          (interaction-pane :interactor))
-  (:top-level (clim:default-frame-top-level :prompt 'print-listener-prompt))
-  (:layouts (default (clim:vertically ()
-                       text-content
-                       interaction-pane))))
-
 (defun open-foo-frame ()
-  (let ((frame (clim:make-application-frame 'foo-frame)))
+  (let ((frame (clim:make-application-frame 'maxima-main-frame)))
     (clim:run-frame-top-level frame)))
+
+(clim:define-command (maxima-eval :menu t :command-table maxima-commands)
+    ((form 'string :prompt "command"))
+  (log:info "eval command. form=~s" form))
