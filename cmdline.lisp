@@ -100,6 +100,7 @@
 (defun render-symbol (stream sym)
   (case sym
     (maxima::$inf (format stream "~c" #\INFINITY))
+    (maxima::$%pi (format stream "~c" #\GREEK_SMALL_LETTER_PI))
     (t (let ((n (symbol-name sym)))
          (if (eql (aref n 0) #\$)
              (clim:with-text-style (stream (clim:make-text-style :serif :italic :normal))
