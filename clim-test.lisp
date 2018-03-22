@@ -20,6 +20,9 @@
 
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
 
+(defun present-to-stream (obj stream)
+  (clim:present obj (clim:presentation-type-of obj) :stream stream))
+
 (defclass update-application-pane (clim:application-pane)
   ())
 
@@ -36,7 +39,7 @@
 (clim:define-application-frame foo-frame ()
   ((content :type string
             :initarg :content
-            :initform "foo"
+            :initform ""
             :accessor foo-frame/content))
   (:panes (text-content :application
                         :default-view 'text-content-view
@@ -113,6 +116,27 @@
     (clim:accept 'post-content :prompt "Post content")))
 
 (defun display-text-content (frame stream)
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (let ((fraction-spacing 2)
+                     (top (clim:with-output-to-output-record (stream)
+                            (format stream "top with more text")))
+                     (bottom (clim:with-output-to-output-record (stream)
+                               (format stream "bottom"))))
+                 (multiple-value-bind (top-width top-height)
+                     (clim:rectangle-size top)
+                   (multiple-value-bind (bottom-width bottom-height)
+                       (clim:rectangle-size bottom)
+                     (declare (ignore bottom-height))
+                     (let ((max-width (max top-width)))
+                       (setf (clim:output-record-position top)
+                             (values (/ (- max-width top-width) 2) 0))
+                       (setf (clim:output-record-position bottom)
+                             (values (/ (- max-width bottom-width) 2) (+ top-height (+ (* fraction-spacing 2) 1))))
+                       (clim:stream-add-output-record stream top)
+                       (clim:stream-add-output-record stream bottom)
+                       (let ((y (+ top-height fraction-spacing)))
+                         (clim:draw-line* stream 0 y max-width y)))))))))
+    (clim:stream-add-output-record stream rec))
   (format stream "~a" (foo-frame/content frame)))
 
 (defun open-foo-frame ()
