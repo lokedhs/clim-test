@@ -70,7 +70,8 @@
            (output-record (make-expression-output-record *standard-output* result)))
       (clim:with-room-for-graphics (*standard-output*)
         (clim:surrounding-output-with-border (*standard-output* :padding 10 :ink clim:+transparent-ink+)
-          (clim:stream-add-output-record *standard-output* output-record))))))
+          (clim:stream-add-output-record *standard-output* output-record)))
+      (format t "some text~%"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Maths rendering
@@ -78,6 +79,17 @@
 
 (defvar *aligned-rendering-pos*)
 (defvar *aligned-rendering-stream*)
+(defvar *font-size*)
+
+(defmacro with-font-size ((stream size) &body body)
+  `(let ((*font-size* ,size))
+     (clim:with-text-style (,stream (clim:make-text-style :serif :roman *font-size*))
+       ,@body)))
+
+(defmacro with-font-size-change ((stream mod) &body body)
+  `(let ((*font-size* (max (* *font-size* ,mod) 10)))
+     (clim:with-text-style (,stream (clim:make-text-style :serif :roman *font-size*))
+      ,@body)))
 
 (defun %aligned-render-and-move (stream pos fn)
   (let ((output-record (clim:with-output-to-output-record (stream)
@@ -124,7 +136,7 @@
     (maxima::$%pi (format stream "~c" #\GREEK_SMALL_LETTER_PI))
     (t (let ((n (symbol-name sym)))
          (if (eql (aref n 0) #\$)
-             (clim:with-text-style (stream (clim:make-text-style :serif :italic :normal))
+             (clim:with-text-style (stream (clim:make-text-style :serif :italic *font-size*))
                (format stream "~a" (string-downcase (subseq n 1))))
              (format stream "~s" sym))))))
 
@@ -161,12 +173,14 @@
   (let ((base (clim:with-output-to-output-record (stream)
                 (render-maxima-expression stream a)))
         (exp (clim:with-output-to-output-record (stream)
-               (render-maxima-expression stream b))))
+               (with-font-size-change (stream 2/3)
+                 (render-maxima-expression stream b)))))
     (multiple-value-bind (base-width base-height)
         (clim:rectangle-size base)
       (clim:stream-add-output-record stream base)
       (setf (clim:output-record-position exp)
-            (values base-width (- base-height)))
+            (values (- base-width 2)
+                    (- (- base-height 4))))
       (clim:stream-add-output-record stream exp))))
 
 (defun render-plain (stream spacing ch a b)
@@ -253,10 +267,11 @@
 
 (defun make-expression-output-record (stream expr)
   (log:info "Making output record for expr: ~s" expr)
-  (let ((output-record (clim:with-output-to-output-record (stream)
-                         (render-maxima-expression stream expr))))
-    (log:info "Final output record: pos=(~s), size=(~s)"
-              (multiple-value-list (clim:output-record-position output-record))
-              (multiple-value-list (clim:rectangle-size output-record)))
-    (setf (clim:output-record-position output-record) (values 0 0))
-    output-record))
+  (with-font-size (stream 14)
+    (let ((output-record (clim:with-output-to-output-record (stream)
+                           (render-maxima-expression stream expr))))
+      (log:info "Final output record: pos=(~s), size=(~s)"
+                (multiple-value-list (clim:output-record-position output-record))
+                (multiple-value-list (clim:rectangle-size output-record)))
+      (setf (clim:output-record-position output-record) (values 0 0))
+      output-record)))
