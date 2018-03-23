@@ -76,6 +76,27 @@
 ;;; Maths rendering
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defvar *aligned-rendering-pos*)
+(defvar *aligned-rendering-stream*)
+
+(defun %aligned-render-and-move (stream pos fn)
+  (let ((output-record (clim:with-output-to-output-record (stream)
+                         (funcall fn))))
+    (multiple-value-bind (w h)
+        (clim:rectangle-size output-record)
+      (setf (clim:output-record-position output-record) (values pos (- (/ h 2))))
+      (clim:stream-add-output-record stream output-record)
+      (+ pos w))))
+
+(defmacro with-aligned-rendering ((stream) &body body)
+  `(let ((*aligned-rendering-pos* 0)
+         (*aligned-rendering-stream* ,stream))
+     ,@body))
+
+(defmacro render-aligned (() &body body)
+  `(setf *aligned-rendering-pos* (%aligned-render-and-move *aligned-rendering-stream* *aligned-rendering-pos*
+                                                           (lambda () ,@body))))
+
 (defun render-quotient (stream top-expr bottom-expr)
   (let ((fraction-spacing 2)
         (top (clim:with-output-to-output-record (stream)
@@ -111,34 +132,22 @@
   (format stream "-")
   (render-maxima-expression stream expr))
 
-(defun %render-and-move (stream pos fn)
-  (let ((output-record (clim:with-output-to-output-record (stream)
-                         (funcall fn))))
-    (multiple-value-bind (w h)
-        (clim:rectangle-size output-record)
-      (setf (clim:output-record-position output-record) (values pos (- (/ h 2))))
-      (clim:stream-add-output-record stream output-record)
-      (+ pos w))))
-
-(defmacro render-and-move (stream pos &body body)
-  `(%render-and-move ,stream ,pos (lambda () ,@body)))
-
 (defun render-plus (stream exprs)
   (log:info "render plus: ~s" exprs)
-  (loop
-    with pos = 0
-    for expr in exprs
-    for first = t then nil
-    if (and (listp expr)
-            (alexandria:length= (length expr) 2)
-            (listp (car expr))
-            (eq (caar expr) 'maxima::mminus))
-      do (setf pos (render-and-move stream pos (render-negation stream (second expr))))
-    else
-      do (progn
-           (unless first
-             (setf pos (render-and-move stream pos (format stream "+"))))
-           (setf pos (render-and-move stream pos (render-maxima-expression stream expr))))))
+  (with-aligned-rendering (stream)
+    (loop
+      for expr in exprs
+      for first = t then nil
+      if (and (listp expr)
+              (alexandria:length= (length expr) 2)
+              (listp (car expr))
+              (eq (caar expr) 'maxima::mminus))
+        do (render-aligned () (render-negation stream (second expr)))
+      else
+        do (progn
+             (unless first
+               (render-aligned () (format stream "+")))
+             (render-aligned () (render-maxima-expression stream expr))))))
 
 (defun render-times (stream exprs)
   (loop
@@ -155,37 +164,76 @@
                (render-maxima-expression stream b))))
     (multiple-value-bind (base-width base-height)
         (clim:rectangle-size base)
-      (multiple-value-bind (exp-width exp-height)
-          (clim:rectangle-size exp)
-        (declare (ignore exp-width))
-        (clim:stream-add-output-record stream base)
-        (setf (clim:output-record-position exp)
-              (values base-width (- (/ base-height 2) exp-height)))
-        (clim:stream-add-output-record stream exp)))))
+      (clim:stream-add-output-record stream base)
+      (setf (clim:output-record-position exp)
+            (values base-width (- base-height)))
+      (clim:stream-add-output-record stream exp))))
 
 (defun render-plain (stream spacing ch a b)
-  (let ((pos 0))
-    (setf pos (render-and-move stream pos (render-maxima-expression stream a)))
-    (incf pos spacing)
-    (setf pos (render-and-move stream pos (format stream "~c" ch)))
-    (incf pos spacing)
-    (render-and-move stream pos (render-maxima-expression stream b))))
+  (with-aligned-rendering (stream)
+    (render-aligned () (render-maxima-expression stream a))
+    (incf *aligned-rendering-pos* spacing)
+    (render-aligned () (format stream "~c" ch))
+    (incf *aligned-rendering-pos* spacing)
+    (render-aligned () (render-maxima-expression stream b))))
 
 (defun render-equal (stream a b)
   (render-plain stream 4 #\= a b))
 
 (defun render-function (stream name exprs)
   (log:info "Rendering function: name=~s, exprs=~s" name exprs)
-  (let ((pos 0))
-    (setf pos (render-and-move stream pos (render-symbol stream (car name))))
-    (setf pos (render-and-move stream pos (format stream "(")))
+  (with-aligned-rendering (stream)
+    (render-aligned () (render-symbol stream (car name)))
+    (render-aligned () (format stream "("))
     (loop
       for expr in exprs
       for first = t then nil
       unless first
-        do (setf pos (render-and-move stream pos (format stream ", ")))
-      do (setf pos (render-and-move stream pos (render-maxima-expression stream expr))))
-    (render-and-move stream pos (format stream ")"))))
+        do (render-aligned () (format stream ", "))
+      do (render-aligned () (render-maxima-expression stream expr)))
+    (render-aligned () (format stream ")"))))
+
+(defun render-sum (stream f var from to)
+  (let* ((bottom (clim:with-output-to-output-record (stream)
+                   (with-aligned-rendering (stream)
+                     (render-aligned () (render-maxima-expression stream var))
+                     (render-aligned () (format stream "="))
+                     (render-aligned () (render-maxima-expression stream from)))))
+         (top    (clim:with-output-to-output-record (stream)
+                   (render-maxima-expression stream to)))
+         (exp    (clim:with-output-to-output-record (stream)
+                   (render-maxima-expression stream f))))
+    (multiple-value-bind (exp-width exp-height)
+        (clim:rectangle-size exp)
+      (declare (ignore exp-width))
+      (let ((sigma  (clim:with-output-to-output-record (stream)
+                      (clim:with-text-style (stream (clim:make-text-style :serif :roman (+ 10 exp-height)))
+                        (format stream "~c" #\GREEK_CAPITAL_LETTER_SIGMA)))))
+        (multiple-value-bind (sigma-width sigma-height)
+            (clim:rectangle-size sigma)
+          (clim:stream-add-output-record stream sigma)
+          ;;
+          (multiple-value-bind (bottom-width)
+              (clim:rectangle-size bottom)
+            (setf (clim:output-record-position bottom)
+                  (values (/ (- sigma-width bottom-width) 2)
+                          sigma-height))
+            (clim:stream-add-output-record stream bottom))
+          ;;
+          (multiple-value-bind (top-width top-height)
+              (clim:rectangle-size top)
+            (setf (clim:output-record-position top)
+                  (values (/ (- sigma-width top-width) 2)
+                          (- top-height)))
+            (clim:stream-add-output-record stream top))
+          ;;
+          (multiple-value-bind (exp-width exp-height)
+              (clim:rectangle-size exp)
+            (declare (ignore exp-width))
+            (setf (clim:output-record-position exp)
+                  (values (+ sigma-width 4)
+                          (/ (- sigma-height exp-height) 2)))
+            (clim:stream-add-output-record stream exp)))))))
 
 (defun render-maxima-expression (stream expr)
   (let ((fixed (maxima::nformat-check expr)))
@@ -200,9 +248,15 @@
               (maxima::mtimes (render-times stream (cdr fixed)))
               (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
               (maxima::mequal (render-equal stream (second fixed) (third fixed)))
+              (maxima::%sum (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
               (t (render-function stream (car fixed) (cdr fixed))))))))
 
 (defun make-expression-output-record (stream expr)
   (log:info "Making output record for expr: ~s" expr)
-  (clim:with-output-to-output-record (stream)
-    (render-maxima-expression stream expr)))
+  (let ((output-record (clim:with-output-to-output-record (stream)
+                         (render-maxima-expression stream expr))))
+    (log:info "Final output record: pos=(~s), size=(~s)"
+              (multiple-value-list (clim:output-record-position output-record))
+              (multiple-value-list (clim:rectangle-size output-record)))
+    (setf (clim:output-record-position output-record) (values 0 0))
+    output-record))
