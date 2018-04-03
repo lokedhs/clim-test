@@ -39,9 +39,11 @@
   (multiple-value-bind (object type)
       (let ((clim:*command-dispatchers* '(#\;)))
         (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-          (clim:accept 'string :stream stream :prompt nil :default "foo" :default-type 'string)))
+          (clim:accept 'string :stream stream :prompt nil :default "" :default-type 'string)))
     (log:info "Got input: object=~s, type=~s" object type)
-    `(maxima-eval ,object)))
+    (let ((expression (string-trim " " object)))
+      (unless (equal expression "")
+        `(maxima-eval ,expression)))))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
@@ -79,8 +81,8 @@
 (defvar *aligned-rendering-pos*)
 (defvar *aligned-rendering-stream*)
 (defvar *font-size*)
-(defvar *font-roman* '(:serif :roman))
-(defvar *font-italic* :italic)
+(defvar *font-roman* '("Noto Serif" "Regular"))
+(defvar *font-italic* '("Noto Serif" "Italic"))
 
 (defmacro with-font-size ((stream size) &body body)
   `(let ((*font-size* ,size))
@@ -137,7 +139,9 @@
     (maxima::$%pi (format stream "~c" #\GREEK_SMALL_LETTER_PI))
     (t (let ((n (symbol-name sym)))
          (if (eql (aref n 0) #\$)
-             (clim:with-text-face (stream :italic)
+             (clim:with-text-style (stream (clim-internals::make-text-style (first *font-italic*)
+                                                                            (second *font-italic*)
+                                                                            *font-size*))
                (format stream "~a" (string-downcase (subseq n 1))))
              (format stream "~s" sym))))))
 
@@ -163,12 +167,13 @@
              (render-aligned () (render-maxima-expression stream expr))))))
 
 (defun render-times (stream exprs)
-  (loop
-    for expr in exprs
-    for first = t then nil
-    unless first
-      do (format stream "~c" #\MIDDLE_DOT)
-    do (render-maxima-expression stream expr)))
+  (with-aligned-rendering (stream)
+    (loop
+      for expr in exprs
+      for first = t then nil
+      unless first
+        do (render-aligned () (clim:draw-text* stream (format nil "~c" #\MIDDLE_DOT) 0 0))
+      do (render-aligned () (render-maxima-expression stream expr)))))
 
 (defun render-expt (stream a b)
   (let ((base (clim:with-output-to-output-record (stream)
@@ -293,7 +298,9 @@
 (defun make-expression-output-record (stream expr)
   (log:info "Making output record for expr: ~s" expr)
   (let ((*font-size* 14))
-    (clim:with-text-style (stream (clim-extensions:font-face-text-style (cadr *font-roman*) *font-size*))
+    (clim:with-text-style (stream (clim-internals::make-text-style (first *font-roman*)
+                                                                   (second *font-roman*)
+                                                                   *font-size*))
       (let ((output-record (clim:with-output-to-output-record (stream)
                              (render-maxima-expression stream expr))))
         (log:info "Final output record: pos=(~s), size=(~s)"

@@ -13,6 +13,8 @@
     #+nil
     (dolist (p (mapcar #'pathname-directory (directory #p"/home/emartenson/src/McCLIM-xkb/**/*.asd")))
       (pushnew (make-pathname :directory p) asdf:*central-registry* :test #'equal))
+    (unless (find-package "LOG4CL")
+      (ql:quickload "log4cl"))
     (ql:quickload "mcclim")
     #+nil(ql:quickload "mcclim-gtkairo"))
   (unless (find-package "LOG4CL")
