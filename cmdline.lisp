@@ -100,9 +100,11 @@
 (defun %aligned-render-and-move (stream pos fn)
   (let ((output-record (clim:with-output-to-output-record (stream)
                          (funcall fn))))
-    (multiple-value-bind (w h)
+    (multiple-value-bind (w)
         (clim:rectangle-size output-record)
-      (setf (clim:output-record-position output-record) (values pos (- (/ h 2))))
+      (setf (clim:output-record-position output-record)
+            (values pos
+                    (- (clim-extensions:output-record-baseline output-record))))
       (clim:stream-add-output-record stream output-record)
       (+ pos w))))
 
@@ -120,7 +122,8 @@
     (clim:draw-text* *aligned-rendering-stream* (apply #'format nil fmt args) 0 0)))
 
 (defun render-formatted (stream fmt &rest args)
-  (apply #'format stream fmt args))
+  (with-aligned-rendering (stream)
+    (apply #'render-aligned-string fmt args)))
 
 (defun render-quotient (stream top-expr bottom-expr)
   (let ((fraction-spacing 2)
@@ -244,16 +247,19 @@
                            (render-formatted stream ")")))))
       (multiple-value-bind (left-paren-width)
           (clim:rectangle-size left-paren)
+        (setf (clim:output-record-position left-paren)
+              (values 0
+                      (- (clim-extensions:output-record-baseline left-paren))))
         (clim:stream-add-output-record stream left-paren)
         ;;
         (setf (clim:output-record-position output-record)
               (values left-paren-width
-                      0))
+                      (- (clim-extensions:output-record-baseline output-record))))
         (clim:stream-add-output-record stream output-record)
         ;;
         (setf (clim:output-record-position right-paren)
               (values (+ left-paren-width width)
-                      0))
+                      (- (clim-extensions:output-record-baseline right-paren))))
         (clim:stream-add-output-record stream right-paren)))))
 
 (defun render-function (stream name exprs)
