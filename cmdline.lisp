@@ -78,11 +78,14 @@
 ;;; Maths rendering
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(defvar *font-roman* '("Noto Serif" "Regular"))
+(defvar *font-italic* '("Noto Serif" "Italic"))
+
 (defvar *aligned-rendering-pos*)
 (defvar *aligned-rendering-stream*)
 (defvar *font-size*)
-(defvar *font-roman* '("Noto Serif" "Regular"))
-(defvar *font-italic* '("Noto Serif" "Italic"))
+(defvar *rop*)
+(defvar *lop*)
 
 (defmacro with-font-size ((stream size) &body body)
   `(let ((*font-size* ,size))
@@ -112,6 +115,13 @@
   `(setf *aligned-rendering-pos* (%aligned-render-and-move *aligned-rendering-stream* *aligned-rendering-pos*
                                                            (lambda () ,@body))))
 
+(defun render-aligned-string (fmt &rest args)
+  (render-aligned ()
+    (clim:draw-text* *aligned-rendering-stream* (apply #'format nil fmt args) 0 0)))
+
+(defun render-formatted (stream fmt &rest args)
+  (apply #'format stream fmt args))
+
 (defun render-quotient (stream top-expr bottom-expr)
   (let ((fraction-spacing 2)
         (top (clim:with-output-to-output-record (stream)
@@ -135,45 +145,68 @@
 
 (defun render-symbol (stream sym)
   (case sym
-    (maxima::$inf (format stream "~c" #\INFINITY))
-    (maxima::$%pi (format stream "~c" #\GREEK_SMALL_LETTER_PI))
+    (maxima::$inf (render-formatted stream "~c" #\INFINITY))
+    (maxima::$%pi (render-formatted stream "~c" #\GREEK_SMALL_LETTER_PI))
     (t (let ((n (symbol-name sym)))
          (if (eql (aref n 0) #\$)
              (clim:with-text-style (stream (clim-internals::make-text-style (first *font-italic*)
                                                                             (second *font-italic*)
                                                                             *font-size*))
-               (format stream "~a" (string-downcase (subseq n 1))))
-             (format stream "~s" sym))))))
+               (render-formatted stream "~a" (string-downcase (subseq n 1))))
+             (render-formatted stream "~s" sym))))))
 
 (defun render-negation (stream expr)
-  (format stream "-")
-  (render-maxima-expression stream expr))
+  (log:info "Render negation: ~s" expr)
+  (with-aligned-rendering (stream)
+    (render-aligned-string "-")
+    (let ((*lop* 'maxima::mminus))
+      (render-aligned () (render-maxima-expression stream expr)))))
+
+(defmacro iterate-exprs ((sym exprs op &key first-sym) &body body)
+  (alexandria:with-gensyms (run-body p v first)
+    (alexandria:once-only (exprs op)
+      `(labels ((,run-body (,p ,first)
+                  (let ((,sym ,p))
+                    ,(if first-sym
+                         `(let ((,first-sym ,first))
+                            ,@body)
+                         `(progn ,@body)))))
+         (when ,exprs
+           (cond ((and (car ,exprs)
+                       (null (cdr ,exprs)))
+                  (,run-body (car ,exprs) t))
+                 (t
+                  (let ((*rop* ,op))
+                    (,run-body (car ,exprs) t))
+                  (let ((*lop* ,op))
+                    (loop
+                      for ,v on (cdr ,exprs)
+                      if (cdr ,v)
+                        do (let ((*rop* ,op))
+                             (,run-body (car ,v) nil))
+                      else
+                        do (,run-body (car ,v) nil))))))))))
 
 (defun render-plus (stream exprs)
   (log:info "render plus: ~s" exprs)
   (with-aligned-rendering (stream)
-    (loop
-      for expr in exprs
-      for first = t then nil
-      if (and (listp expr)
-              (alexandria:length= (length expr) 2)
-              (listp (car expr))
-              (eq (caar expr) 'maxima::mminus))
-        do (render-aligned () (render-negation stream (second expr)))
-      else
-        do (progn
+    (iterate-exprs (expr exprs 'maxima::mplus :first-sym first)
+      (cond ((and (listp expr)
+                  (alexandria:length= (length expr) 2)
+                  (listp (car expr))
+                  (eq (caar expr) 'maxima::mminus))
+             (render-aligned () (render-negation stream (second expr))))
+            (t
              (unless first
-               (render-aligned () (format stream "+")))
-             (render-aligned () (render-maxima-expression stream expr))))))
+               (render-aligned-string "+"))
+             (render-aligned () (render-maxima-expression stream expr)))))))
 
 (defun render-times (stream exprs)
   (with-aligned-rendering (stream)
-    (loop
-      for expr in exprs
-      for first = t then nil
-      unless first
-        do (render-aligned () (clim:draw-text* stream (format nil "~c" #\MIDDLE_DOT) 0 0))
-      do (render-aligned () (render-maxima-expression stream expr)))))
+    (iterate-exprs (expr exprs 'maxima::mtimes :first-sym first)
+      (unless first
+        (render-aligned-string "~c" #\MIDDLE_DOT))
+      (render-aligned () (render-maxima-expression stream expr)))))
 
 (defun render-expt (stream a b)
   (let ((base (clim:with-output-to-output-record (stream)
@@ -193,7 +226,7 @@
   (with-aligned-rendering (stream)
     (render-aligned () (render-maxima-expression stream a))
     (incf *aligned-rendering-pos* spacing)
-    (render-aligned () (format stream "~c" ch))
+    (render-aligned-string "~c" ch)
     (incf *aligned-rendering-pos* spacing)
     (render-aligned () (render-maxima-expression stream b))))
 
@@ -205,10 +238,10 @@
       (clim:rectangle-size output-record)
     (let ((left-paren (clim:with-output-to-output-record (stream)
                         (clim:with-text-size (stream height)
-                          (format stream "("))))
+                          (render-formatted stream "("))))
           (right-paren (clim:with-output-to-output-record (stream)
                          (clim:with-text-size (stream height)
-                           (format stream ")")))))
+                           (render-formatted stream ")")))))
       (multiple-value-bind (left-paren-width)
           (clim:rectangle-size left-paren)
         (clim:stream-add-output-record stream left-paren)
@@ -233,7 +266,7 @@
                         for expr in exprs
                         for first = t then nil
                         unless first
-                          do (render-aligned () (format stream ", "))
+                          do (render-aligned-string ", ")
                         do (render-aligned () (render-maxima-expression stream expr)))))))
       (render-aligned () (wrap-with-parens stream params)))))
 
@@ -241,7 +274,7 @@
   (let* ((bottom (clim:with-output-to-output-record (stream)
                    (with-aligned-rendering (stream)
                      (render-aligned () (render-maxima-expression stream var))
-                     (render-aligned () (format stream "="))
+                     (render-aligned () (render-formatted stream "="))
                      (render-aligned () (render-maxima-expression stream from)))))
          (top    (clim:with-output-to-output-record (stream)
                    (render-maxima-expression stream to)))
@@ -252,7 +285,7 @@
       (declare (ignore exp-width))
       (let ((sigma  (clim:with-output-to-output-record (stream)
                       (clim:with-text-size (stream (+ 10 exp-height))
-                        (format stream "~c" #\GREEK_CAPITAL_LETTER_SIGMA)))))
+                        (render-formatted stream "~c" #\GREEK_CAPITAL_LETTER_SIGMA)))))
         (multiple-value-bind (sigma-width sigma-height)
             (clim:rectangle-size sigma)
           (clim:stream-add-output-record stream sigma)
@@ -280,20 +313,32 @@
             (clim:stream-add-output-record stream exp)))))))
 
 (defun render-maxima-expression (stream expr)
-  (let ((fixed (maxima::nformat-check expr)))
-    (log:info "Calling render expression on: ~s" fixed)
-    (etypecase fixed
-      (number (format stream "~a" fixed))
-      (symbol (render-symbol stream fixed))
-      (list (case (caar fixed)
-              (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
-              (maxima::mplus (render-plus stream (cdr fixed)))
-              (maxima::mminus (render-negation stream (cdr fixed)))
-              (maxima::mtimes (render-times stream (cdr fixed)))
-              (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
-              (maxima::mequal (render-equal stream (second fixed) (third fixed)))
-              (maxima::%sum (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
-              (t (render-function stream (car fixed) (cdr fixed))))))))
+  (labels ((render-inner (fixed)
+             (case (caar fixed)
+               (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
+               (maxima::mplus (render-plus stream (cdr fixed)))
+               (maxima::mminus (render-negation stream (second fixed)))
+               (maxima::mtimes (render-times stream (cdr fixed)))
+               (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
+               (maxima::mequal (render-equal stream (second fixed) (third fixed)))
+               (maxima::%sum (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
+               (t (render-function stream (car fixed) (cdr fixed))))))
+    (let ((fixed (maxima::nformat-check expr)))
+      (log:info "Calling render expression on: ~s" fixed)
+      (etypecase fixed
+        (number (render-formatted stream "~a" fixed))
+        (symbol (render-symbol stream fixed))
+        (list (progn
+                (log:info "Paren check: (~s ≤ ~s) ∨ (~s ≤ ~s)  [lop:~s, rop:~s, op:~s]"
+                          (maxima::lbp (caar fixed)) (maxima::rbp *lop*)
+                          (maxima::rbp (caar fixed)) (maxima::lbp *rop*)
+                          *lop* *rop* (caar fixed))
+                (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
+                        (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
+                    (let ((output-record (clim:with-output-to-output-record (stream)
+                                           (render-inner fixed))))
+                      (wrap-with-parens stream output-record))
+                    (render-inner fixed))))))))
 
 (defun make-expression-output-record (stream expr)
   (log:info "Making output record for expr: ~s" expr)
@@ -302,7 +347,9 @@
                                                                    (second *font-roman*)
                                                                    *font-size*))
       (let ((output-record (clim:with-output-to-output-record (stream)
-                             (render-maxima-expression stream expr))))
+                             (let ((*lop* 'maxima::mparen)
+                                   (*rop* 'maxima::mparen))
+                               (render-maxima-expression stream expr)))))
         (log:info "Final output record: pos=(~s), size=(~s)"
                   (multiple-value-list (clim:output-record-position output-record))
                   (multiple-value-list (clim:rectangle-size output-record)))
