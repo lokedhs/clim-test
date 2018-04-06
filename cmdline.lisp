@@ -184,6 +184,31 @@
          (*rop* 'maxima::mparen))
      ,@body))
 
+(defmacro iterate-exprs ((sym exprs op &key first-sym) &body body)
+  (alexandria:with-gensyms (run-body p v first)
+    (alexandria:once-only (exprs op)
+      `(labels ((,run-body (,p ,first)
+                  (let ((,sym ,p))
+                    ,(if first-sym
+                         `(let ((,first-sym ,first))
+                            ,@body)
+                         `(progn ,@body)))))
+         (when ,exprs
+           (cond ((and (car ,exprs)
+                       (null (cdr ,exprs)))
+                  (,run-body (car ,exprs) t))
+                 (t
+                  (let ((*rop* ,op))
+                    (,run-body (car ,exprs) t))
+                  (let ((*lop* ,op))
+                    (loop
+                      for ,v on (cdr ,exprs)
+                      if (cdr ,v)
+                        do (let ((*rop* ,op))
+                             (,run-body (car ,v) nil))
+                      else
+                        do (,run-body (car ,v) nil))))))))))
+
 (defun render-quotient (stream top-expr bottom-expr)
   (let ((fraction-spacing 2)
         (top (clim:with-output-to-output-record (stream)
@@ -218,31 +243,6 @@
     (render-aligned-string "-")
     (let ((*lop* 'maxima::mminus))
       (render-aligned () (render-maxima-expression stream expr)))))
-
-(defmacro iterate-exprs ((sym exprs op &key first-sym) &body body)
-  (alexandria:with-gensyms (run-body p v first)
-    (alexandria:once-only (exprs op)
-      `(labels ((,run-body (,p ,first)
-                  (let ((,sym ,p))
-                    ,(if first-sym
-                         `(let ((,first-sym ,first))
-                            ,@body)
-                         `(progn ,@body)))))
-         (when ,exprs
-           (cond ((and (car ,exprs)
-                       (null (cdr ,exprs)))
-                  (,run-body (car ,exprs) t))
-                 (t
-                  (let ((*rop* ,op))
-                    (,run-body (car ,exprs) t))
-                  (let ((*lop* ,op))
-                    (loop
-                      for ,v on (cdr ,exprs)
-                      if (cdr ,v)
-                        do (let ((*rop* ,op))
-                             (,run-body (car ,v) nil))
-                      else
-                        do (,run-body (car ,v) nil))))))))))
 
 (defun render-plus (stream exprs)
   (log:info "render plus: ~s" exprs)
@@ -383,6 +383,22 @@
               (set-rec-position exp sigma-right (+ sigma-top (/ (- sigma-height exp-height) 2)))
               (clim:stream-add-output-record stream (make-boxed-output-record stream exp)))))))))
 
+(defun render-sqrt (stream expr)
+  (let ((exp (clim:with-output-to-output-record (stream)
+               (let ((*lop* 'maxima::mparen))
+                 (render-maxima-expression stream expr)))))
+    (dimension-bind (exp :height height :x x :y y :bottom bottom :right right)
+      (let* ((angle 0.2)
+             (hg 0.4)
+             (hg-angle 0.4)
+             (hg-height (* height hg)))
+        (clim:draw-design stream (clim:make-polyline* (list (- x (* height angle) (* hg-height hg-angle)) (- bottom hg-height)
+                                                            (- x (* height angle)) bottom
+                                                            x y
+                                                            right y))
+                          :line-thickness 2)
+        (clim:stream-add-output-record stream exp)))))
+
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
              (log:info "checking fixed = ~s" fixed)
@@ -395,6 +411,7 @@
                (maxima::mexpt (render-expt stream (second fixed) (third fixed)))
                (maxima::mequal (render-equal stream (second fixed) (third fixed)))
                (maxima::%sum (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
+               (maxima::%sqrt (render-sqrt stream (second fixed)))
                (t (render-function stream (car fixed) (cdr fixed))))))
     (let ((fixed (maxima::nformat-check expr)))
       (log:info "Calling render expression on: ~s" fixed)
