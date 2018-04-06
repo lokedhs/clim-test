@@ -13,12 +13,58 @@
     #+nil
     (dolist (p (mapcar #'pathname-directory (directory #p"/home/emartenson/src/McCLIM-xkb/**/*.asd")))
       (pushnew (make-pathname :directory p) asdf:*central-registry* :test #'equal))
+    (unless (find-package "LOG4CL")
+      (ql:quickload "log4cl"))
     (ql:quickload "mcclim")
     #+nil(ql:quickload "mcclim-gtkairo"))
   (unless (find-package "LOG4CL")
     (ql:quickload "log4cl")))
 
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
+
+(defun present-to-stream (obj stream)
+  (clim:present obj (clim:presentation-type-of obj) :stream stream))
+
+(defmacro dimension-bind ((output-record &key
+                                           ((:width width-sym)) ((:height height-sym))
+                                           ((:x x-sym)) ((:y y-sym))
+                                           ((:right right-sym)) ((:bottom bottom-sym))
+                                           ((:baseline baseline-sym)))
+                          &body body)
+  (alexandria:with-gensyms (width height x y)
+    (alexandria:once-only (output-record)
+      (labels ((make-body ()
+                 `(progn ,@body))
+               (make-baseline ()
+                 (if baseline-sym
+                     `(let ((,baseline-sym (clim-extensions:output-record-baseline ,output-record)))
+                        ,(make-body))
+                     (make-body)))
+               (make-position-form ()
+                 (if (or x-sym y-sym right-sym bottom-sym)
+                     `(multiple-value-bind (,x ,y)
+                          (clim:output-record-position ,output-record)
+                        (declare (ignorable ,x ,y))
+                        (let (,@(if x-sym `((,x-sym ,x)))
+                              ,@(if y-sym `((,y-sym ,y)))
+                              ,@(if right-sym `((,right-sym (+ ,x ,width))))
+                              ,@(if bottom-sym `((,bottom-sym (+ ,y ,height)))))
+                          ,(make-baseline)))
+                     (make-baseline))))
+        (if (or width-sym height-sym right-sym bottom-sym)
+            `(multiple-value-bind (,width ,height)
+                 (clim:rectangle-size ,output-record)
+               (declare (ignorable ,width ,height))
+               (let (,@(if width-sym `((,width-sym ,width)))
+                     ,@(if height-sym `((,height-sym ,height))))
+                 ,(make-position-form)))
+            (make-position-form))))))
+
+(defun make-boxed-output-record (stream rec)
+  (clim:with-output-to-output-record (stream)
+    (dimension-bind (rec :x x :y y :right right :bottom bottom)
+      (clim:stream-add-output-record stream rec)
+      (clim:draw-rectangle* stream x y (1- right) (1- bottom) :filled nil))))
 
 (defclass update-application-pane (clim:application-pane)
   ())
@@ -36,7 +82,7 @@
 (clim:define-application-frame foo-frame ()
   ((content :type string
             :initarg :content
-            :initform "foo"
+            :initform ""
             :accessor foo-frame/content))
   (:panes (text-content :application
                         :default-view 'text-content-view
@@ -112,8 +158,114 @@
     (clim:accept 'string :prompt "Some string")
     (clim:accept 'post-content :prompt "Post content")))
 
+(defun draw-paren-test (stream)
+  (let ((output-record (clim:with-output-to-output-record (stream)
+                         (format stream "foo")))
+        (left-paren (clim:with-output-to-output-record (stream)
+                      (clim:with-text-size (stream 30)
+                        (format stream "("))))
+        (right-paren (clim:with-output-to-output-record (stream)
+                       (clim:with-text-size (stream 30)
+                         (format stream ")")))))
+    (log:info "baselines: o:~f, l:~f, r:~f"
+              (clim-extensions:output-record-baseline output-record)
+              (clim-extensions:output-record-baseline left-paren)
+              (clim-extensions:output-record-baseline right-paren))
+    (multiple-value-bind (width height)
+        (clim:rectangle-size output-record)
+      (multiple-value-bind (left-paren-width left-paren-height)
+          (clim:rectangle-size left-paren)
+        (multiple-value-bind (right-paren-width right-paren-height)
+            (clim:rectangle-size right-paren)
+          ;;
+          (log:info "heights: o:~f, l:~f, r:~f"
+                    height left-paren-height right-paren-height)
+          (log:info "positions: o:~s, l:~s, r:~s"
+                    (multiple-value-list (clim:output-record-position output-record))
+                    (multiple-value-list (clim:output-record-position left-paren))
+                    (multiple-value-list (clim:output-record-position right-paren)))
+          ;;
+          (setf (clim:output-record-position left-paren)
+                (values 0
+                        (- (clim-extensions:output-record-baseline left-paren))))
+          (clim:stream-add-output-record stream left-paren)
+          ;;
+          (setf (clim:output-record-position output-record)
+                (values left-paren-width
+                        (- (clim-extensions:output-record-baseline output-record))))
+          (clim:stream-add-output-record stream output-record)
+          ;;
+          (setf (clim:output-record-position right-paren)
+                (values (+ left-paren-width width)
+                        (- (clim-extensions:output-record-baseline right-paren))))
+          (clim:stream-add-output-record stream right-paren)
+          ;;
+          (clim:draw-text* stream "xyz" (+ width left-paren-width right-paren-width) 0)
+          ;;
+          (clim:draw-line* stream 0 0 100 50)
+          ;;
+          (log:info "positions: o:~s, l:~s, r:~s"
+                    (mapcar #'float (multiple-value-list (clim:output-record-position output-record)))
+                    (mapcar #'float (multiple-value-list (clim:output-record-position left-paren)))
+                    (mapcar #'float (multiple-value-list (clim:output-record-position right-paren)))))))))
+
+(defun display-text-content-parens (frame stream)
+  (clim:with-text-style (stream (clim-internals::make-text-style "Noto Serif" "Regular" 24))
+    #+nil
+    (let ((rec (clim:with-output-to-output-record (stream)
+                 (let ((fraction-spacing 2)
+                       (top (clim:with-output-to-output-record (stream)
+                              (format stream "top with more text")))
+                       (bottom (clim:with-output-to-output-record (stream)
+                                 (format stream "bottom"))))
+                   (multiple-value-bind (top-width top-height)
+                       (clim:rectangle-size top)
+                     (multiple-value-bind (bottom-width bottom-height)
+                         (clim:rectangle-size bottom)
+                       (declare (ignore bottom-height))
+                       (let ((max-width (max top-width)))
+                         (setf (clim:output-record-position top)
+                               (values (/ (- max-width top-width) 2) 0))
+                         (setf (clim:output-record-position bottom)
+                               (values (/ (- max-width bottom-width) 2) (+ top-height (+ (* fraction-spacing 2) 1))))
+                         (clim:stream-add-output-record stream top)
+                         (clim:stream-add-output-record stream bottom)
+                         (let ((y (+ top-height fraction-spacing)))
+                           (clim:draw-line* stream 0 y max-width y)))))))))
+      (clim:with-room-for-graphics (stream)
+        (clim:stream-add-output-record stream rec)))
+    ;;
+    #+nil (clim:draw-line* stream 0 0 200 100)
+    (let ((rec (clim:with-output-to-output-record (stream)
+                 (draw-paren-test stream))))
+      (multiple-value-bind (width)
+          (clim:rectangle-size rec)
+        (setf (clim:output-record-position rec)
+              (values 0 0))
+        (clim:stream-add-output-record stream rec)
+        (log:info "baseline: ~s" (clim-extensions:output-record-baseline rec))
+        (clim:draw-text* stream "Should have the same baseline" width (clim-extensions:output-record-baseline rec))))
+    ;;
+    (format stream "~a" (foo-frame/content frame))))
+
 (defun display-text-content (frame stream)
-  (format stream "~a" (foo-frame/content frame)))
+  (declare (ignore frame))
+  (loop
+    for s in '("x" "." "M" "g")
+    for y from 40 by 40
+    do (let ((rec (clim:with-output-to-output-record (stream)
+                    (clim:with-text-style (stream (clim-internals::make-text-style "Noto Serif" "Regular" 24))
+                      (clim:draw-text* stream s 0 0)
+                      (multiple-value-bind (width height final-x final-y baseline)
+                          (clim:text-size stream s)
+                        (declare (ignorable width height final-x final-y baseline))
+                        (log:info "Analysed ~s: final-y=~s, baseline=~s, height=~s" s final-y baseline height)
+                        (clim:draw-line* stream 0 final-y 40 final-y :ink clim:+green+)
+                        (clim:draw-line* stream 0 0 40 (- baseline) :ink clim:+red+)
+                        (clim:draw-line* stream 0 0 40 (- height baseline)))))))
+         (setf (clim:output-record-position rec)
+               (values 20 y))
+         (clim:stream-add-output-record stream (make-boxed-output-record stream rec)))))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame)))
