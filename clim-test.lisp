@@ -25,6 +25,47 @@
 (defun present-to-stream (obj stream)
   (clim:present obj (clim:presentation-type-of obj) :stream stream))
 
+(defmacro dimension-bind ((output-record &key
+                                           ((:width width-sym)) ((:height height-sym))
+                                           ((:x x-sym)) ((:y y-sym))
+                                           ((:right right-sym)) ((:bottom bottom-sym))
+                                           ((:baseline baseline-sym)))
+                          &body body)
+  (alexandria:with-gensyms (width height x y)
+    (alexandria:once-only (output-record)
+      (labels ((make-body ()
+                 `(progn ,@body))
+               (make-baseline ()
+                 (if baseline-sym
+                     `(let ((,baseline-sym (clim-extensions:output-record-baseline ,output-record)))
+                        ,(make-body))
+                     (make-body)))
+               (make-position-form ()
+                 (if (or x-sym y-sym right-sym bottom-sym)
+                     `(multiple-value-bind (,x ,y)
+                          (clim:output-record-position ,output-record)
+                        (declare (ignorable ,x ,y))
+                        (let (,@(if x-sym `((,x-sym ,x)))
+                              ,@(if y-sym `((,y-sym ,y)))
+                              ,@(if right-sym `((,right-sym (+ ,x ,width))))
+                              ,@(if bottom-sym `((,bottom-sym (+ ,y ,height)))))
+                          ,(make-baseline)))
+                     (make-baseline))))
+        (if (or width-sym height-sym right-sym bottom-sym)
+            `(multiple-value-bind (,width ,height)
+                 (clim:rectangle-size ,output-record)
+               (declare (ignorable ,width ,height))
+               (let (,@(if width-sym `((,width-sym ,width)))
+                     ,@(if height-sym `((,height-sym ,height))))
+                 ,(make-position-form)))
+            (make-position-form))))))
+
+(defun make-boxed-output-record (stream rec)
+  (clim:with-output-to-output-record (stream)
+    (dimension-bind (rec :x x :y y :right right :bottom bottom)
+      (clim:stream-add-output-record stream rec)
+      (clim:draw-rectangle* stream x y (1- right) (1- bottom) :filled nil))))
+
 (defclass update-application-pane (clim:application-pane)
   ())
 
@@ -168,7 +209,7 @@
                     (mapcar #'float (multiple-value-list (clim:output-record-position left-paren)))
                     (mapcar #'float (multiple-value-list (clim:output-record-position right-paren)))))))))
 
-(defun display-text-content (frame stream)
+(defun display-text-content-parens (frame stream)
   (clim:with-text-style (stream (clim-internals::make-text-style "Noto Serif" "Regular" 24))
     #+nil
     (let ((rec (clim:with-output-to-output-record (stream)
@@ -206,6 +247,24 @@
         (clim:draw-text* stream "Should have the same baseline" width (clim-extensions:output-record-baseline rec))))
     ;;
     (format stream "~a" (foo-frame/content frame))))
+
+(defun display-text-content (frame stream)
+  (declare (ignore frame))
+  (loop
+    for s in '("x" "." "M" "g")
+    for y from 40 by 40
+    do (let ((rec (clim:with-output-to-output-record (stream)
+                    (clim:with-text-style (stream (clim-internals::make-text-style "Noto Serif" "Regular" 24))
+                      (clim:draw-text* stream s 0 0)
+                      (multiple-value-bind (width height final-x final-y baseline)
+                          (clim:text-size stream s)
+                        (declare (ignorable width height final-x final-y baseline))
+                        (clim:draw-line* stream 0 final-y 40 final-y :ink clim:+green+)
+                        (clim:draw-line* stream 0 0 40 (- baseline) :ink clim:+red+)
+                        (clim:draw-line* stream 0 0 40 (- height baseline)))))))
+         (setf (clim:output-record-position rec)
+               (values 20 y))
+         (clim:stream-add-output-record stream (make-boxed-output-record stream rec)))))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame)))
