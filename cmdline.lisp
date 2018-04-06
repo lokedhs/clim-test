@@ -336,6 +336,14 @@
                         do (render-aligned () (render-maxima-expression stream expr)))))))
       (render-aligned () (wrap-with-parens stream params)))))
 
+(defun render-and-measure-string (stream string &optional (x 0) (y 0))
+  (multiple-value-bind (width height final-x final-y baseline)
+      (clim:text-size stream string)
+    (declare (ignore width final-x final-y))
+    (let ((rec (clim:with-output-to-output-record (stream)
+                 (clim:draw-text* stream string x y))))
+      (list rec baseline (- height baseline)))))
+
 (defun render-sum (stream f var from to)
   (let* ((bottom (clim:with-output-to-output-record (stream)
                    (with-aligned-rendering (stream)
@@ -349,37 +357,38 @@
          (exp    (clim:with-output-to-output-record (stream)
                    (let ((*lop* 'maxima::%sum))
                      (render-maxima-expression stream f)))))
-    (multiple-value-bind (exp-width exp-height)
-        (clim:rectangle-size exp)
-      (declare (ignore exp-width))
-      (let ((sigma  (clim:with-output-to-output-record (stream)
-                      (clim:with-text-size (stream (+ 10 exp-height))
-                        (clim:draw-text* stream (format nil "~c" #\GREEK_CAPITAL_LETTER_SIGMA) 0 0)))))
-        (dimension-bind (sigma :width sigma-width :height sigma-height
-                               :bottom sigma-bottom :right sigma-right
-                               :x sigma-x :y sigma-y)
-          (clim:stream-add-output-record stream (make-boxed-output-record stream sigma))
-          ;;
-          (dimension-bind (bottom :width bottom-width)
-            (set-rec-position bottom
-                              (+ sigma-x (/ (- sigma-width bottom-width) 2))
-                              sigma-bottom)
-            (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))
-          ;;
-          (dimension-bind (top :width top-width :height top-height)
-            (set-rec-position top
-                              (/ (- sigma-width top-width) 2)
-                              (- sigma-y top-height))
-            (clim:stream-add-output-record stream (make-boxed-output-record stream top)))
-          ;;
-          (dimension-bind (exp :height exp-height)
-            (set-rec-position exp sigma-right (+ sigma-y (/ (- sigma-height exp-height) 2)))
-            (clim:stream-add-output-record stream (make-boxed-output-record stream exp))))))))
+    (dimension-bind (exp :height exp-height)
+      (destructuring-bind (sigma sigma-ascent sigma-descent)
+          (clim:with-text-size (stream (+ 10 exp-height))
+            (render-and-measure-string stream (format nil "~c" #\GREEK_CAPITAL_LETTER_SIGMA)))
+        (dimension-bind (sigma :width sigma-width :right sigma-right :x sigma-x)
+          (let ((sigma-top (- sigma-ascent))
+                (sigma-bottom sigma-descent)
+                (sigma-height (+ sigma-ascent sigma-descent)))
+            (clim:stream-add-output-record stream (make-boxed-output-record stream sigma))
+            ;;
+            (dimension-bind (bottom :width bottom-width)
+              (set-rec-position bottom
+                                (+ sigma-x (/ (- sigma-width bottom-width) 2))
+                                sigma-bottom)
+              (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))
+            ;;
+            (dimension-bind (top :width top-width :height top-height)
+              (set-rec-position top
+                                (/ (- sigma-width top-width) 2)
+                                (- sigma-top top-height))
+              (clim:stream-add-output-record stream (make-boxed-output-record stream top)))
+            ;;
+            (dimension-bind (exp :height exp-height)
+              (set-rec-position exp sigma-right (+ sigma-top (/ (- sigma-height exp-height) 2)))
+              (clim:stream-add-output-record stream (make-boxed-output-record stream exp)))))))))
 
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
+             (log:info "checking fixed = ~s" fixed)
              (case (caar fixed)
                (maxima::mquotient (render-quotient stream (second fixed) (third fixed)))
+               (maxima::rat (render-quotient stream (second fixed) (third fixed)))
                (maxima::mplus (render-plus stream (cdr fixed)))
                (maxima::mminus (render-negation stream (second fixed)))
                (maxima::mtimes (render-times stream (cdr fixed)))
