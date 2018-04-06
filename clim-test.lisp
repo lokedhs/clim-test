@@ -259,6 +259,7 @@
                       (multiple-value-bind (width height final-x final-y baseline)
                           (clim:text-size stream s)
                         (declare (ignorable width height final-x final-y baseline))
+                        (log:info "Analysed ~s: final-y=~s, baseline=~s, height=~s" s final-y baseline height)
                         (clim:draw-line* stream 0 final-y 40 final-y :ink clim:+green+)
                         (clim:draw-line* stream 0 0 40 (- baseline) :ink clim:+red+)
                         (clim:draw-line* stream 0 0 40 (- height baseline)))))))
