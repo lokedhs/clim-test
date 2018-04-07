@@ -41,18 +41,23 @@
 (defvar *font-families* (make-hash-table :test 'equal))
 
 (defclass freetype-font-family (clim-extensions:font-family)
-  ((name :type string
-         :initarg name)))
+  ())
 
-(defun find-font-family (name)
-  (alexandria:ensure-gethash name *font-families* (make-instance 'freetype-font-family :name name)))
+(defun find-font-family (port name)
+  (alexandria:ensure-gethash (list port name) *font-families*
+                             (make-instance 'freetype-font-family :port port :name name)))
 
 (defclass freetype-face (clim-extensions:font-face)
-  ((face :initarg :face)
+  ((face :initarg :face
+         :reader freetype-face/face)
    (family :type freetype-font-family)))
 
-(defmethod initialize-instance :after ((obj freetype-face) &key)
-  (setf (slot-value obj 'family) (find-font-family (clim-extensions:font-face-name obj))))
+(defmethod initialize-instance :after ((obj freetype-face) &key port)
+  (let* ((face (freetype-face/face obj))
+         (family-name (freetype2-types:ft-face-family-name face))
+         (name (freetype2-types:ft-face-style-name face)))
+    (setf (slot-value obj 'clim-extensions:font-face-family) (find-font-family port family-name))
+    (setf (slot-value obj 'clim-extensions:font-face-name) name)))
 
 (defclass freetype-font ()
   ())
@@ -66,7 +71,9 @@
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (clim:draw-text* stream "Foo" 40 40 :text-face (make-instance 'freetype-face :face *face*)))
+  (let* ((face (make-instance 'freetype-face :face *face*))
+         (s (clim-internals::make-text-style (clim-extensions:font-face-family face) face 14)))
+    (clim:draw-text* stream "Foo" 40 40 :text-style s)))
 
 (defmethod clim-clx::font-draw-glyphs ((font freetype-face) mirror gc x y string &key start end translate size)
   (log:info "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
