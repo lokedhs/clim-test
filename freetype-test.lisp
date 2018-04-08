@@ -60,7 +60,22 @@
     (setf (slot-value obj 'clim-extensions:font-face-name) name)))
 
 (defclass freetype-font ()
-  ())
+  ((face :initarg :face
+         :reader freetype-font/face)
+   (size :initarg :size
+         :reader freetype-font/size)))
+
+(defmacro with-size-face ((sym face size) &body body)
+  (alexandria:once-only (face size)
+    `(progn
+       (freetype2:set-char-size ,face (* ,size 64) 0 72 72)
+       (let ((,sym ,face))
+         ,@body))))
+
+(defmacro with-face-from-font ((sym font) &body body)
+  (alexandria:once-only (font)
+    `(with-size-face (,sym (freetype-font/face ,font) (freetype-font/size ,font))
+       ,@body)))
 
 (defmethod clim-extensions:font-face-all-sizes ((face freetype-face))
   '(8 12 18 20 24 36))
@@ -78,6 +93,31 @@
 (defmethod clim-clx::font-draw-glyphs ((font freetype-face) mirror gc x y string &key start end translate size)
   (log:info "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
             font mirror gc x y string start end translate size)
+  (break)
   #+nil
   (freetype2:do-string-render (*face* "Foo" bitmap x y)
     (log:info "Rendering bitmap: ~s" bitmap)))
+
+(defmethod clim-clx::font-text-extents ((font freetype-font) string &key (start 0) (end (length string)) translate)
+  (log:info "Getting text extents for ~s, with string: ~s" font string))
+
+(defmethod clim-clx::font-ascent ((font freetype-font))
+  (with-face-from-font (face font)
+    (freetype2:face-ascender-pixels face)))
+
+(defmethod clim-clx::font-descent ((font freetype-font))
+  (with-face-from-font (face font)
+    (freetype2:face-descender-pixels face)))
+
+(defmethod clim-clx::text-style-to-X-font :around ((port clim-clx::clx-port) (text-style climi::device-font-text-style))
+  (log:info "finding font for device-font-text-style: ~s" text-style))
+
+(defun find-freetype-font (text-style)
+  (multiple-value-bind (family face size)
+      (clim:text-style-components text-style)
+    (make-instance 'freetype-font :face *face* :size size)))
+
+(defmethod clim-clx::text-style-to-X-font :around ((port clim-clx::clx-port) (text-style clim:standard-text-style))
+  (or (clim:text-style-mapping port text-style)
+      (setf (climi::text-style-mapping port text-style)
+            (find-freetype-font text-style))))
