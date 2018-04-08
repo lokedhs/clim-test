@@ -38,6 +38,16 @@
       (freetype2:set-char-size *face* (* 18 64) 0 72 72))
     (clim:run-frame-top-level frame)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; clx-freetype implementation
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defclass clx-freetype-port (clim-clx::clx-port)
+  ())
+
+(setf (get :clx-freetype :server-path-parser) 'clim-clx::parse-clx-server-path)
+(setf (get :clx-freetype :port-type) 'clx-freetype-port)
+
 (defvar *font-families* (make-hash-table :test 'equal))
 
 (defclass freetype-font-family (clim-extensions:font-family)
@@ -65,6 +75,11 @@
    (size :initarg :size
          :reader freetype-font/size)))
 
+(defmethod print-object ((obj freetype-font) stream)
+  (print-unreadable-object (obj stream :type t :identity nil)
+    (let ((face (freetype-font/face obj)))
+      (format stream "FACE ~s SIZE ~s" (freetype-font/face obj) (freetype-font/size obj)))))
+
 (defmacro with-size-face ((sym face size) &body body)
   (alexandria:once-only (face size)
     `(progn
@@ -90,16 +105,29 @@
          (s (clim-internals::make-text-style (clim-extensions:font-face-family face) face 14)))
     (clim:draw-text* stream "Foo" 40 40 :text-style s)))
 
-(defmethod clim-clx::font-draw-glyphs ((font freetype-face) mirror gc x y string &key start end translate size)
+(defmethod clim-clx::font-draw-glyphs ((font freetype-font) mirror gc x y string &key start end translate size)
   (log:info "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
             font mirror gc x y string start end translate size)
-  (break)
   #+nil
   (freetype2:do-string-render (*face* "Foo" bitmap x y)
     (log:info "Rendering bitmap: ~s" bitmap)))
 
 (defmethod clim-clx::font-text-extents ((font freetype-font) string &key (start 0) (end (length string)) translate)
-  (log:info "Getting text extents for ~s, with string: ~s" font string))
+  (log:info "Getting text extents for ~s, with string: ~s" font string)
+  ;; Values to return:
+  ;;   width ascent descent left right font-ascent font-descent direction first-not-done
+  (with-face-from-font (face font)
+    (let* ((s (subseq string start end))
+           (width (freetype2:string-pixel-width face s)))
+      (values width
+              (freetype2:face-ascender-pixels face)
+              (freetype2:face-descender-pixels face)
+              0
+              width
+              (freetype2:face-ascender-pixels face)
+              (freetype2:face-descender-pixels face)
+              0
+              end))))
 
 (defmethod clim-clx::font-ascent ((font freetype-font))
   (with-face-from-font (face font)
@@ -109,15 +137,20 @@
   (with-face-from-font (face font)
     (freetype2:face-descender-pixels face)))
 
-(defmethod clim-clx::text-style-to-X-font :around ((port clim-clx::clx-port) (text-style climi::device-font-text-style))
+(defmethod clim-clx::text-style-to-x-font ((port clx-freetype-port) (text-style climi::device-font-text-style))
   (log:info "finding font for device-font-text-style: ~s" text-style))
 
 (defun find-freetype-font (text-style)
   (multiple-value-bind (family face size)
       (clim:text-style-components text-style)
-    (make-instance 'freetype-font :face *face* :size size)))
+    (make-instance 'freetype-font
+                   :face *face*
+                   :size (etypecase size
+                           (keyword (or (getf clim-clx::*clx-text-sizes* size) 12))
+                           (number size)))))
 
-(defmethod clim-clx::text-style-to-X-font :around ((port clim-clx::clx-port) (text-style clim:standard-text-style))
+(defmethod clim-clx::text-style-to-x-font ((port clx-freetype-port) (text-style clim:standard-text-style))
+  (log:info "finding font for standard-text-style: ~s" text-style)
   (or (clim:text-style-mapping port text-style)
       (setf (climi::text-style-mapping port text-style)
             (find-freetype-font text-style))))
