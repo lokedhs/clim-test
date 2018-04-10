@@ -115,8 +115,7 @@ main(int argc, char **argv)
 					 30);
 
     XMapWindow(display, window);
-    XRenderColor    bg_color = {.red = 0xffff,.green = 0xffff,.blue = 0xffff,.alpha = 0xffff
-    };
+    XRenderColor    bg_color = { .red = 0xffff,.green = 0xffff,.blue = 0xffff,.alpha = 0xffff };
 
     while (1) {
 	XEvent          event;
