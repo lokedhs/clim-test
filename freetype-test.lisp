@@ -146,16 +146,54 @@
         (setf (first picture-info) fg))
       (cdr picture-info))))
 
+(defun create-glyphset (drawable)
+  (let* ((formats (xlib::render-query-picture-formats (xlib:drawable-display drawable)))
+         (format (find-if (lambda (v)
+                            (and (= (car (xlib::picture-format-red-byte v)) 8)
+                                 (= (car (xlib::picture-format-green-byte v)) 8)
+                                 (= (car (xlib::picture-format-blue-byte v)) 8)
+                                 (= (car (xlib::picture-format-alpha-byte v)) 8)))
+                          formats)))
+    (unless format
+      (error "Can't find 8-bit RGBA format"))
+    (xlib::render-create-glyph-set format)))
+
+(defun render-char-to-glyphset (glyphset face ch)
+  (freetype2:load-char face ch)
+  (let* ((glyph (freetype2-types:ft-face-glyph face))
+         (advance (freetype2-types:ft-glyphslot-advance glyph))
+         (bitmap (freetype2-types:ft-glyphslot-bitmap (freetype2:render-glyph glyph :lcd))))
+    (multiple-value-bind (data type)
+        (freetype2:bitmap-to-array bitmap)
+      (declare (ignore type))
+      (xlib::render-add-glyph glyphset (char-code ch)
+                              :x-origin (freetype2-types:ft-glyphslot-bitmap-left glyph)
+                              :y-origin (freetype2-types:ft-glyphslot-bitmap-top glyph)
+                              :x-advance (freetype2-types:ft-vector-x advance)
+                              :y-advance (freetype2-types:ft-vector-x advance)
+                              :data (let* ((length (reduce #'* (array-dimensions data)))
+                                           (a (make-array (array-dimensions data)
+                                                          :element-type '(unsigned-byte 8))))
+                                      (loop
+                                        for i from 0 below length
+                                        do (setf (row-major-aref a i) (row-major-aref data i)))
+                                      a)))))
+
 (defmethod clim-clx::font-draw-glyphs ((font freetype-font) mirror gc x y string &key start end translate size)
-  (log:debug "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
+  (log:info "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
             font mirror gc x y string start end translate size)
-  (let ((display (xlib:drawable-display mirror)))
-    (destructuring-bind (source-picture source-pixmap)
-        (gcontext-picture mirror gc)
-      (log:info "Found source=picture=~s, source-pixmap=~s" source-picture source-pixmap)
-      (with-face-from-font (face font)
-        (freetype2:do-string-render (*face* string bitmap x y)
-          (log:debug "Drawing glyph at (~a,~a)" x y))))))
+  (let ((glyphset (create-glyphset mirror)))
+    ;; hard-code loading of the ASCII glyphset, for testing purposes
+    (with-face-from-font (face font)
+      (loop
+        for i from 33 below 128
+        do (render-char-to-glyphset glyphset face (code-char i))))
+    (log:info "created glyph set: ~s" glyphset)
+    (let ((source nil)
+          (dest nil))
+      (xlib::render-composite-glyphs dest glyphset source x y
+                                     (map 'vector #'char-code string)
+                                     :start start :end end))))
 
 (defmethod clim-clx::font-text-extents ((font freetype-font) string &key (start 0) (end (length string)) translate)
   (declare (ignore translate))
