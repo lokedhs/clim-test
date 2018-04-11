@@ -34,7 +34,7 @@
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame)))
     (unless *face*
-      (setq *face* (freetype2:new-face #p"/home/elias/.fonts/NotoSans-Regular.ttf"))
+      (setq *face* (freetype2:new-face #p"/usr/share/fonts/noto/NotoSans-Regular.ttf"))
       (freetype2:set-char-size *face* (* 18 64) 0 72 72))
     (clim:run-frame-top-level frame)))
 
@@ -42,7 +42,7 @@
   (declare (ignore frame))
   (let* ((face (make-instance 'freetype-face :face *face*))
          (s (clim-internals::make-text-style (clim-extensions:font-face-family face) face 40)))
-    (clim:draw-text* stream "Foo" 40 40 :text-style s)))
+    (clim:draw-text* stream "Foo X" 40 40 :text-style s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; clx-freetype implementation
@@ -114,50 +114,13 @@
   (log:info "Making text style: face=~s, size=~s" face size)
   (clim:make-text-style (clim-extensions:font-face-family face) face size))
 
-(defun gcontext-picture (drawable gcontext)
-  (flet ((update-foreground (picture)
-           ;; FIXME! This makes assumptions about pixel format, and breaks 
-           ;; on e.g. 16 bpp displays.
-           ;; It would be better to store xrender-friendly color values in
-           ;; medium-gcontext, at the same time we set the gcontext 
-           ;; foreground. That way we don't need to know the pixel format.
-           (let ((fg (the xlib:card32 (xlib:gcontext-foreground gcontext))))
-             (xlib::render-fill-rectangle picture
-                                          :src                                          
-                                          (list (ash (ldb (byte 8 16) fg) 8)
-                                                (ash (ldb (byte 8 8) fg) 8)
-                                                (ash (ldb (byte 8 0) fg) 8)
-                                                #xFFFF)
-                                          0 0 1 1))))
-    (let* ((fg (xlib:gcontext-foreground gcontext))
-           (picture-info
-            (or (getf (xlib:gcontext-plist gcontext) 'picture)
-                (setf (getf (xlib:gcontext-plist gcontext) 'picture)
-                      (let* ((pixmap (xlib:create-pixmap 
-                                      :drawable drawable
-                                      :depth (xlib:drawable-depth drawable)
-                                      :width 1 :height 1))
-                             (picture (xlib::render-create-picture
-                                       pixmap
-                                       :format (xlib::find-window-picture-format
-                                                (xlib:drawable-root drawable))
-                                       :repeat :on)))
-                        (update-foreground picture)
-                        (list fg
-                             picture
-                             pixmap))))))
-      (unless (eql fg (first picture-info))
-        (update-foreground (second picture-info))
-        (setf (first picture-info) fg))
-      (cdr picture-info))))
-
 (defun find-rgba-format (drawable)
   (let* ((formats (xlib::render-query-picture-formats (xlib:drawable-display drawable)))
          (format (find-if (lambda (v)
-                            (and (= (car (xlib::picture-format-red-byte v)) 8)
-                                 (= (car (xlib::picture-format-green-byte v)) 8)
-                                 (= (car (xlib::picture-format-blue-byte v)) 8)
-                                 (= (car (xlib::picture-format-alpha-byte v)) 8)))
+                            (and (= (car (xlib:picture-format-red-byte v)) 8)
+                                 (= (car (xlib:picture-format-green-byte v)) 8)
+                                 (= (car (xlib:picture-format-blue-byte v)) 8)
+                                 (= (car (xlib:picture-format-alpha-byte v)) 0)))
                           formats)))
     (unless format
       (error "Can't find 8-bit RGBA format"))
@@ -165,37 +128,46 @@
 
 (defun create-glyphset (drawable)
   (let ((format (find-rgba-format drawable)))
-    (xlib::render-create-glyph-set format)))
+    (xlib:render-create-glyph-set format)))
+
+(defun bitmap->array (bitmap)
+  (let* ((width (/ (freetype2-types:ft-bitmap-width bitmap) 3))
+         (height (freetype2-types:ft-bitmap-rows bitmap)))
+    (assert (typep width 'integer))
+
+    (if (or (zerop width) (zerop height))
+        ;; Zero-sized glyphs causes the renderer to hang
+        (make-array '(1 1) :element-type '(unsigned-byte 32) :initial-element 0)
+        ;; Format the glyph array in a way that xrender accepts
+        (let ((array (make-array (list height width) :element-type '(unsigned-byte 32) :initial-element 0)))
+          (loop
+            with buffer = (freetype2-types:ft-bitmap-buffer bitmap)
+            with pitch = (freetype2-types:ft-bitmap-pitch bitmap)
+            for y from 0 below height
+            for ptr = (cffi:inc-pointer buffer (* y pitch))
+            do (loop
+                 for x from 0 below width
+                 for v = (logior (ash (cffi:mem-ref ptr :unsigned-char (+ (* x 3) 2)) 16)
+                                 (ash (cffi:mem-ref ptr :unsigned-char (+ (* x 3) 1)) 8)
+                                 (cffi:mem-ref ptr :unsigned-char (* x 3)))
+                 do (setf (aref array y x) v)))
+          array))))
 
 (defun render-char-to-glyphset (glyphset face ch)
   (freetype2:load-char face ch '(:force-autohint))
   (let* ((glyph (freetype2-types:ft-face-glyph face))
          (advance (freetype2-types:ft-glyphslot-advance glyph))
          (bitmap (freetype2-types:ft-glyphslot-bitmap (freetype2:render-glyph glyph :lcd))))
-    (multiple-value-bind (data type)
-        (freetype2:bitmap-to-array bitmap)
-      (declare (ignore type))
-      #+nil
-      (log:info "char=~s, type=~s, dimension=~s, adv-x=~s, adv-y=~s"
-                ch type (array-dimensions data)
-                (freetype2-types:ft-vector-x advance)
-                (freetype2-types:ft-vector-y advance))
-      (xlib:render-add-glyph glyphset (char-code ch)
-                              :x-origin (freetype2-types:ft-glyphslot-bitmap-left glyph)
-                              :y-origin (freetype2-types:ft-glyphslot-bitmap-top glyph)
-                              :x-advance (/ (freetype2-types:ft-vector-x advance) 64)
-                              :y-advance 0 ; (/ (freetype2-types:ft-vector-x advance) 64)
-                              :data (let* ((length (reduce #'* (array-dimensions data)))
-                                           (a (make-array (array-dimensions data)
-                                                          :element-type '(unsigned-byte 8))))
-                                      (loop
-                                        for i from 0 below length
-                                        do (setf (row-major-aref a i) (row-major-aref data i)))
-                                      a)))))
+    (xlib:render-add-glyph glyphset (char-code ch)
+                           :x-origin (freetype2-types:ft-glyphslot-bitmap-left glyph)
+                           :y-origin (freetype2-types:ft-glyphslot-bitmap-top glyph)
+                           :x-advance (/ (freetype2-types:ft-vector-x advance) 64)
+                           :y-advance 0 ; (/ (freetype2-types:ft-vector-x advance) 64)
+                           :data (bitmap->array bitmap))))
 
 (defun create-dest-picture (drawable)
   (xlib:render-create-picture drawable
-                              :format (xlib::find-window-picture-format (xlib:drawable-root drawable))
+                              :format (xlib:find-window-picture-format (xlib:drawable-root drawable))
                               :poly-edge :smooth
                               :poly-mode :precise))
 
@@ -214,12 +186,12 @@
     ;; hard-code loading of the ASCII glyphset, for testing purposes
     (with-face-from-font (face font)
       (loop
-        for i from 33 below 128
+        for i from 32 below 128
         do (render-char-to-glyphset glyphset face (code-char i))))
     (let ((source (create-pen mirror))
           (dest (create-dest-picture mirror)))
       (xlib:render-composite-glyphs dest glyphset source x y
-                                    (map 'vector #'char-code "Foo")
+                                    (map 'vector #'char-code string)
                                     :start start :end end)
       (xlib:render-free-picture source)
       (xlib:render-free-picture dest)
