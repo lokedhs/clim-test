@@ -11,7 +11,8 @@
     (unless (find-package "LOG4CL")
       (ql:quickload "log4cl"))
     (ql:quickload "mcclim")
-    (ql:quickload "cl-freetype2")))
+    (ql:quickload "cl-freetype2")
+    (ql:quickload "trivial-garbage")))
 
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
 
@@ -70,9 +71,13 @@
   (alexandria:ensure-gethash (list port name) *font-families*
                              (make-instance 'freetype-font-family :port port :name name)))
 
+(defclass cached-picture ()
+  ((glyphset :initform nil
+             :accessor cached-picture/glyphset)))
+
 (defclass freetype-face (clim-extensions:font-face)
-  ((face :initarg :face
-         :reader freetype-face/face)
+  ((face   :initarg :face
+           :reader freetype-face/face)
    (family :type freetype-font-family)))
 
 (defmethod initialize-instance :after ((obj freetype-face) &key port)
@@ -83,12 +88,23 @@
     (setf (slot-value obj 'clim-extensions:font-face-name) name)))
 
 (defclass freetype-font ()
-  ((face :initarg :face
-         :reader freetype-font/face)
-   (size :initarg :size
-         :reader freetype-font/size)
-   (lock :initform (bordeaux-threads:make-recursive-lock)
-         :reader freetype-font/lock)))
+  ((face           :initarg :face
+                   :reader freetype-font/face)
+   (size           :initarg :size
+                   :reader freetype-font/size)
+   (lock           :initform (bordeaux-threads:make-recursive-lock)
+                   :reader freetype-font/lock)
+   (cached-glyphs  :initform (make-hash-table :test 'eql)
+                   :reader freetype-font/cached-glyphs)
+   (cached-picture :type cached-picture
+                   :reader freetype-font/cached-picture)))
+
+(defmethod initialize-instance :after ((obj freetype-font) &key)
+  (let ((cached (make-instance 'cached-picture)))
+    (setf (slot-value obj 'cached-picture) cached)
+    (trivial-garbage:finalize obj (lambda ()
+                                    (alexandria:when-let ((glyphset (cached-picture/glyphset cached)))
+                                      (xlib:render-free-glyph-set glyphset))))))
 
 (defmethod print-object ((obj freetype-font) stream)
   (print-unreadable-object (obj stream :type t :identity nil)
@@ -126,10 +142,6 @@
       (error "Can't find 8-bit RGBA format"))
     format))
 
-(defun create-glyphset (drawable)
-  (let ((format (find-rgba-format drawable)))
-    (xlib:render-create-glyph-set format)))
-
 (defun bitmap->array (bitmap)
   (let* ((width (/ (freetype2-types:ft-bitmap-width bitmap) 3))
          (height (freetype2-types:ft-bitmap-rows bitmap)))
@@ -153,17 +165,36 @@
                  do (setf (aref array y x) v)))
           array))))
 
-(defun render-char-to-glyphset (glyphset face ch)
-  (freetype2:load-char face ch '(:force-autohint))
+(defun render-char-to-glyphset (glyphset face code)
+  (freetype2:load-char face code '(:force-autohint))
   (let* ((glyph (freetype2-types:ft-face-glyph face))
          (advance (freetype2-types:ft-glyphslot-advance glyph))
          (bitmap (freetype2-types:ft-glyphslot-bitmap (freetype2:render-glyph glyph :lcd))))
-    (xlib:render-add-glyph glyphset (char-code ch)
+    (xlib:render-add-glyph glyphset code
                            :x-origin (freetype2-types:ft-glyphslot-bitmap-left glyph)
                            :y-origin (freetype2-types:ft-glyphslot-bitmap-top glyph)
                            :x-advance (/ (freetype2-types:ft-vector-x advance) 64)
                            :y-advance 0 ; (/ (freetype2-types:ft-vector-x advance) 64)
                            :data (bitmap->array bitmap))))
+
+(defun find-or-create-cached-glyphset (drawable font)
+  (let ((cached (freetype-font/cached-picture font)))
+    (or (cached-picture/glyphset cached)
+        (setf (cached-picture/glyphset cached)
+              (let ((format (find-rgba-format drawable)))
+                (xlib:render-create-glyph-set format))))))
+
+(defun create-glyphset (drawable font char-codes)
+  (let ((glyphset (find-or-create-cached-glyphset drawable font))
+        (cached-glyphs (freetype-font/cached-glyphs font)))
+    (with-face-from-font (face font)
+      (loop
+        for code across char-codes
+        unless (gethash code cached-glyphs)
+          do (progn
+               (render-char-to-glyphset glyphset face code)
+               (setf (gethash code cached-glyphs) t))))
+    glyphset))
 
 (defun create-dest-picture (drawable)
   (xlib:render-create-picture drawable
@@ -182,20 +213,13 @@
 (defmethod clim-clx::font-draw-glyphs ((font freetype-font) mirror gc x y string &key start end translate size)
   (log:info "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
             font mirror gc x y string start end translate size)
-  (let ((glyphset (create-glyphset mirror)))
-    ;; hard-code loading of the ASCII glyphset, for testing purposes
-    (with-face-from-font (face font)
-      (loop
-        for i from 32 below 128
-        do (render-char-to-glyphset glyphset face (code-char i))))
+  (let* ((char-codes (map 'vector #'char-code string))
+         (glyphset (create-glyphset mirror font char-codes)))
     (let ((source (create-pen mirror))
           (dest (create-dest-picture mirror)))
-      (xlib:render-composite-glyphs dest glyphset source x y
-                                    (map 'vector #'char-code string)
-                                    :start start :end end)
+      (xlib:render-composite-glyphs dest glyphset source x y char-codes :start start :end end)
       (xlib:render-free-picture source)
-      (xlib:render-free-picture dest)
-      (xlib:render-free-glyph-set glyphset))))
+      (xlib:render-free-picture dest))))
 
 (defmethod clim-clx::font-text-extents ((font freetype-font) string &key (start 0) (end (length string)) translate)
   (declare (ignore translate))
