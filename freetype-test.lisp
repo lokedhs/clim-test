@@ -135,7 +135,7 @@
                             (and (= (car (xlib:picture-format-red-byte v)) 8)
                                  (= (car (xlib:picture-format-green-byte v)) 8)
                                  (= (car (xlib:picture-format-blue-byte v)) 8)
-                                 (= (car (xlib:picture-format-alpha-byte v)) 0)))
+                                 (= (car (xlib:picture-format-alpha-byte v)) 8)))
                           formats)))
     (unless format
       (error "Can't find 8-bit RGBA format"))
@@ -160,7 +160,8 @@
                  for x from 0 below width
                  for v = (logior (ash (cffi:mem-ref ptr :unsigned-char (+ (* x 3) 2)) 16)
                                  (ash (cffi:mem-ref ptr :unsigned-char (+ (* x 3) 1)) 8)
-                                 (cffi:mem-ref ptr :unsigned-char (* x 3)))
+                                 (cffi:mem-ref ptr :unsigned-char (* x 3))
+                                 #xff000000)
                  do (setf (aref array y x) v)))
           array))))
 
