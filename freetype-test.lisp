@@ -77,8 +77,7 @@
 
 (defclass freetype-face (clim-extensions:font-face)
   ((face   :initarg :face
-           :reader freetype-face/face)
-   (family :type freetype-font-family)))
+           :reader freetype-face/face)))
 
 (defmethod initialize-instance :after ((obj freetype-face) &key port)
   (let* ((face (freetype-face/face obj))
