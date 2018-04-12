@@ -26,10 +26,10 @@
                         :default-view 'text-content-view
                         :display-function 'display-text-content
                         :redisplay-on-resize-p t)
-          #+nil(interaction-pane :interactor))
+          (interaction-pane :interactor))
   (:layouts (default (clim:vertically ()
                        text-content
-                       #+nil interaction-pane))))
+                       interaction-pane))))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame)))
@@ -292,7 +292,11 @@
 ;;;
 
 (defmethod clim-clx::font-glyph-width ((font freetype-font) char)
-  (log:info "getting width of ~s" char))
+  (with-face-from-font (face font)
+    (freetype2:load-char face char)
+    (let* ((glyph (freetype2-types:ft-face-glyph face))
+           (metrics (freetype2-types:ft-glyphslot-metrics glyph)))
+      (/ (freetype2-types:ft-glyph-metrics-width metrics) *freetype-font-scale*))))
 
 (defmethod clim-clx::font-glyph-left ((font freetype-font) char)
   (with-face-from-font (face font)
