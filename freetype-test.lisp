@@ -41,7 +41,7 @@
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (let* ((face (make-instance 'freetype-face :face *face*))
+  (let* ((face (make-instance 'freetype-font-face :face *face*))
          (s (clim-internals::make-text-style (clim-extensions:font-face-family face) face 40)))
     (clim:draw-text* stream "Foo X" 40 40 :text-style s)))
 
@@ -65,7 +65,8 @@
 (defvar *font-families* (make-hash-table :test 'equal))
 
 (defclass freetype-font-family (clim-extensions:font-family)
-  ())
+  ((faces :initform (make-hash-table :test 'equal)
+          :reader freetype-font-family/faces)))
 
 (defun find-font-family (port name)
   (alexandria:ensure-gethash (list port name) *font-families*
@@ -75,15 +76,15 @@
   ((glyphset :initform nil
              :accessor cached-picture/glyphset)))
 
-(defclass freetype-face (clim-extensions:font-face)
+(defclass freetype-font-face (clim-extensions:font-face)
   ((face   :initarg :face
-           :reader freetype-face/face)))
+           :reader freetype-font-face/face)))
 
-(defmethod initialize-instance :after ((obj freetype-face) &key port)
-  (let* ((face (freetype-face/face obj))
+(defmethod initialize-instance :after ((obj freetype-font-face) &key port)
+  (let* ((face (freetype-font-face/face obj))
          (family-name (freetype2-types:ft-face-family-name face))
          (name (freetype2-types:ft-face-style-name face)))
-    (setf (slot-value obj 'clim-extensions:font-face-family) (find-font-family port family-name))
+    (setf (slot-value obj 'clim-extensions:font-face-family) family-name)
     (setf (slot-value obj 'clim-extensions:font-face-name) name)))
 
 (defclass freetype-font ()
@@ -122,12 +123,14 @@
        (with-size-face (,sym (freetype-font/face ,font) (freetype-font/size ,font))
          ,@body))))
 
-(defmethod clim-extensions:font-face-all-sizes ((face freetype-face))
+(defmethod clim-extensions:font-face-all-sizes ((face freetype-font-face))
   '(8 12 18 20 24 36))
 
-(defmethod clim-extensions:font-face-text-style ((face freetype-face) &optional size)
+(defmethod clim-extensions:font-face-text-style ((face freetype-font-face) &optional size)
   (log:info "Making text style: face=~s, size=~s" face size)
-  (clim:make-text-style (clim-extensions:font-face-family face) face size))
+  (clim:make-text-style (clim-extensions:font-face-family face)
+                        (clim-extensions:font-face-name face)
+                        size))
 
 (defun find-rgba-format (drawable)
   (let* ((formats (xlib::render-query-picture-formats (xlib:drawable-display drawable)))
