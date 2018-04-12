@@ -12,11 +12,10 @@
       (ql:quickload "log4cl"))
     (ql:quickload "mcclim")
     (ql:quickload "cl-freetype2")
+    (ql:quickload "fontconfig")
     (ql:quickload "trivial-garbage")))
 
 (declaim (optimize (speed 0) (safety 3) (debug 3)))
-
-(defvar *face* nil)
 
 (defclass text-content-view (clim:view)
   ())
@@ -34,15 +33,12 @@
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame)))
-    (unless *face*
-      (setq *face* (freetype2:new-face #p"/usr/share/fonts/noto/NotoSans-Regular.ttf"))
-      (freetype2:set-char-size *face* (* 18 64) 0 72 72))
     (clim:run-frame-top-level frame)))
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (let* ((face (make-instance 'freetype-font-face :face *face*))
-         (s (clim-internals::make-text-style (clim-extensions:font-face-family face) face 40)))
+  (let ((s (clim:make-text-style "DejaVuSans" "Book" 20
+            )))
     (clim:draw-text* stream "Foo X" 40 40 :text-style s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -80,17 +76,11 @@
   ((face   :initarg :face
            :reader freetype-font-face/face)))
 
-(defmethod initialize-instance :after ((obj freetype-font-face) &key port)
-  (let* ((face (freetype-font-face/face obj))
-         (family-name (freetype2-types:ft-face-family-name face))
-         (name (freetype2-types:ft-face-style-name face)))
-    (setf (slot-value obj 'clim-extensions:font-face-family) family-name)
-    (setf (slot-value obj 'clim-extensions:font-face-name) name)))
-
 (defclass freetype-font ()
   ((face           :initarg :face
                    :reader freetype-font/face)
    (size           :initarg :size
+                   :initform 10
                    :reader freetype-font/size)
    (lock           :initform (bordeaux-threads:make-recursive-lock)
                    :reader freetype-font/lock)
@@ -120,7 +110,7 @@
 (defmacro with-face-from-font ((sym font) &body body)
   (alexandria:once-only (font)
     `(bordeaux-threads:with-recursive-lock-held ((freetype-font/lock ,font))
-       (with-size-face (,sym (freetype-font/face ,font) (freetype-font/size ,font))
+       (with-size-face (,sym (freetype-font-face/face (freetype-font/face ,font)) (freetype-font/size ,font))
          ,@body))))
 
 (defmethod clim-extensions:font-face-all-sizes ((face freetype-font-face))
@@ -253,21 +243,49 @@
 (defmethod clim-clx::text-style-to-x-font ((port clx-freetype-port) (text-style climi::device-font-text-style))
   (log:debug "finding font for device-font-text-style: ~s" text-style))
 
-(defun find-freetype-font (text-style)
+(defun find-best-match (family face)
+  (let ((family-expr (cond
+                       ((eq family :fix) (list (cons "spacing" 100)))
+                       ((eq family :serif) (list (cons "family" "serif")))
+                       ((eq family :sans-serif) (list (cons "family" "sans-serif")))
+                       ((stringp family) (list (cons "family" family)))
+                       (t (list (cons "family" "DejaVuSans")))))
+        (face-expr (cond
+                     ((eq face :roman) (list (cons "weight" 80)))
+                     ((eq face :bold) (list (cons "weight" 200)))
+                     ((eq face :italic) (list (cons "slant" 100)))
+                     ((stringp face) (list (cons "style" face)))
+                     (t (list (cons "weight" 80))))))
+    (let ((result (fontconfig:match-font (append family-expr face-expr))))
+      (list (cdr (assoc :family result))
+            (cdr (assoc :style result))
+            (cdr (assoc :file result))))))
+
+(defun find-freetype-font (port text-style)
   (multiple-value-bind (family face size)
       (clim:text-style-components text-style)
-    (declare (ignore family face))
-    (make-instance 'freetype-font
-                   :face *face*
-                   :size (etypecase size
-                           (keyword (or (getf clim-clx::*clx-text-sizes* size) 12))
-                           (number size)))))
+    (log:info "Looking up family=~s, face=~s, size=~s" family face size)
+    (destructuring-bind (found-family found-style found-file)
+        (find-best-match family face)
+      (log:info "Found: ~s / ~s / ~s" found-family found-style found-file)
+      (let* ((family-obj (find-font-family port found-family))
+             (face-obj (alexandria:ensure-gethash found-style (freetype-font-family/faces family-obj)
+                                                  (let ((freetype-face (freetype2:new-face found-file)))
+                                                    (make-instance 'freetype-font-face
+                                                                   :face freetype-face
+                                                                   :family family-obj
+                                                                   :name found-style)))))
+        (make-instance 'freetype-font
+                       :face face-obj
+                       :size (etypecase size
+                               (keyword (or (getf clim-clx::*clx-text-sizes* size) 12))
+                               (number size)))))))
 
 (defmethod clim-clx::text-style-to-x-font ((port clx-freetype-port) (text-style clim:standard-text-style))
   (log:debug "finding font for standard-text-style: ~s" text-style)
   (or (clim:text-style-mapping port text-style)
       (setf (climi::text-style-mapping port text-style)
-            (find-freetype-font text-style))))
+            (find-freetype-font port text-style))))
 
 ;;;
 ;;;  Character info
@@ -279,14 +297,14 @@
 (defmethod clim-clx::font-glyph-left ((font freetype-font) char)
   (with-face-from-font (face font)
     (freetype2:load-char face char)
-    (let* ((glyph (freetype2-types:ft-face-glyph *face*))
+    (let* ((glyph (freetype2-types:ft-face-glyph face))
            (metrics (freetype2-types:ft-glyphslot-metrics glyph)))
       (/ (freetype2-types:ft-glyph-metrics-hori-bearing-x metrics) *freetype-font-scale*))))
 
 (defmethod clim-clx::font-glyph-right ((font freetype-font) char)
   (with-face-from-font (face font)
     (freetype2:load-char face char)
-    (let* ((glyph (freetype2-types:ft-face-glyph *face*))
+    (let* ((glyph (freetype2-types:ft-face-glyph face))
            (metrics (freetype2-types:ft-glyphslot-metrics glyph)))
       (/ (- (freetype2-types:ft-glyph-metrics-width metrics)
             (freetype2-types:ft-glyph-metrics-hori-advance metrics))

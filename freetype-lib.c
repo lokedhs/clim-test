@@ -111,7 +111,7 @@ main(int argc, char **argv)
     Picture         fg_pen = create_pen(display, 0, 0, 0, 0xffff);
 
     GlyphSet        font = load_glyphset(display,
-					 "/usr/share/fonts/noto/NotoSans-Regular.ttf",
+					 "/home/user/fonts/Caladea-Bold.ttf",
 					 30);
 
     XMapWindow(display, window);
