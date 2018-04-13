@@ -39,7 +39,7 @@
   (declare (ignore frame))
   (let ((s (clim:make-text-style "DejaVuSans" "Book" 20
             )))
-    (clim:draw-text* stream "Foo X" 40 40 :text-style s)))
+    (clim:draw-text* stream "ToToAV f(x)y" 40 40 :text-style s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; clx-freetype implementation
@@ -103,7 +103,7 @@
 (defmacro with-size-face ((sym face size) &body body)
   (alexandria:once-only (face size)
     `(progn
-       (freetype2:set-char-size ,face (* ,size 64) 0 72 72)
+       (freetype2:set-char-size ,face (round (* ,size 64)) 0 72 72)
        (let ((,sym ,face))
          ,@body))))
 
@@ -117,7 +117,7 @@
   '(8 12 18 20 24 36))
 
 (defmethod clim-extensions:font-face-text-style ((face freetype-font-face) &optional size)
-  (log:info "Making text style: face=~s, size=~s" face size)
+  (log:debug "Making text style: face=~s, size=~s" face size)
   (clim:make-text-style (clim-extensions:font-face-family face)
                         (clim-extensions:font-face-name face)
                         size))
@@ -163,8 +163,10 @@
   (let* ((glyph (freetype2-types:ft-face-glyph face))
          (advance (freetype2-types:ft-glyphslot-advance glyph))
          (bitmap (freetype2-types:ft-glyphslot-bitmap (freetype2:render-glyph glyph :lcd))))
+    (when (member code (map 'list #'char-code "ToaAV X"))
+      (log:info "x-origin ~s:~f" (code-char code) (freetype2-types:ft-glyphslot-bitmap-left glyph)))
     (xlib:render-add-glyph glyphset code
-                           :x-origin (freetype2-types:ft-glyphslot-bitmap-left glyph)
+                           :x-origin (- (freetype2-types:ft-glyphslot-bitmap-left glyph))
                            :y-origin (freetype2-types:ft-glyphslot-bitmap-top glyph)
                            :x-advance (/ (freetype2-types:ft-vector-x advance) 64)
                            :y-advance 0 ; (/ (freetype2-types:ft-vector-x advance) 64)
@@ -204,7 +206,7 @@
     picture))
 
 (defmethod clim-clx::font-draw-glyphs ((font freetype-font) mirror gc x y string &key start end translate size)
-  (log:info "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
+  (log:debug "font=~s, mirror=~s, gc=~s, x=~s, y=~s, string=~s, start=~s, end=~s, translate=~s, size=~s"
             font mirror gc x y string start end translate size)
   (let* ((char-codes (map 'vector #'char-code string))
          (glyphset (create-glyphset mirror font char-codes)))
@@ -240,7 +242,7 @@
 
 (defmethod clim-clx::font-text-extents ((font freetype-font) string &key (start 0) (end (length string)) translate)
   (declare (ignore translate))
-  (log:info "Getting text extents for ~s, with string: ~s" font string)
+  (log:debug "Getting text extents for ~s, with string: ~s" font string)
   ;; Values to return:
   ;;   width ascent descent left right font-ascent font-descent direction first-not-done
   (with-face-from-font (face font)
@@ -270,8 +272,8 @@
 (defun find-best-match (family face)
   (let ((family-expr (cond
                        ((eq family :fix) (list (cons "spacing" 100)))
-                       ((eq family :serif) (list (cons "family" "serif")))
-                       ((eq family :sans-serif) (list (cons "family" "sans-serif")))
+                       ((eq family :serif) (list (cons "family" "DejaVu Serif")))
+                       ((eq family :sans-serif) (list (cons "family" "DejaVu Sans")))
                        ((stringp family) (list (cons "family" family)))
                        (t (list (cons "family" "DejaVuSans")))))
         (face-expr (cond
@@ -288,10 +290,10 @@
 (defun find-freetype-font (port text-style)
   (multiple-value-bind (family face size)
       (clim:text-style-components text-style)
-    (log:info "Looking up family=~s, face=~s, size=~s" family face size)
+    (log:debug "Looking up family=~s, face=~s, size=~s" family face size)
     (destructuring-bind (found-family found-style found-file)
         (find-best-match family face)
-      (log:info "Found: ~s / ~s / ~s" found-family found-style found-file)
+      (log:debug "Found: ~s / ~s / ~s" found-family found-style found-file)
       (let* ((family-obj (find-font-family port found-family))
              (face-obj (alexandria:ensure-gethash found-style (freetype-font-family/faces family-obj)
                                                   (let ((freetype-face (freetype2:new-face found-file)))
@@ -303,7 +305,8 @@
                        :face face-obj
                        :size (etypecase size
                                (keyword (or (getf clim-clx::*clx-text-sizes* size) 12))
-                               (number size)))))))
+                               (number size)
+                               (null 12)))))))
 
 (defmethod clim-clx::text-style-to-x-font ((port clx-freetype-port) (text-style clim:standard-text-style))
   (log:debug "finding font for standard-text-style: ~s" text-style)
