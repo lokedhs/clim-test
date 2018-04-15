@@ -44,11 +44,12 @@ load_glyph(Display * display, GlyphSet gs, FT_Face face, int charcode)
     XSync(display, 0);
 }
 
+FT_Library library;
+
 GlyphSet
 load_glyphset(Display * display, char *filename, int size)
 {
     static int      ft_lib_initialized = 0;
-    static FT_Library library;
     int             n;
     XRenderPictFormat *fmt_a8 = XRenderFindStandardFormat(display, PictStandardA8);
     GlyphSet        gs = XRenderCreateGlyphSet(display, fmt_a8);
@@ -90,6 +91,37 @@ create_pen(Display * display, int red, int green, int blue, int alpha)
     return picture;
 }
 
+static void setup_hb(char *filename)
+{
+    FT_Face face;
+
+    FT_New_Face(library, filename, 0, &face);
+
+    FT_Set_Char_Size(face, 0, 40 * 64, 90, 90);
+
+    //FT_Done_Face(face);
+
+    hb_font_t *font = hb_ft_font_create(face, NULL);
+    hb_buffer_t *buf = hb_buffer_create();
+    hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+    hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+    hb_buffer_set_language(buf, hb_language_from_string("en", 2));
+    hb_buffer_add_utf8(buf, "Foo", 3, 0, 3);
+    hb_shape(font, buf, NULL, 0);
+
+    unsigned int num_glyphs;
+    hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &num_glyphs);
+    hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &num_glyphs);
+
+    printf("got %d glyphs\n", num_glyphs);
+
+    for(int i = 0 ; i < num_glyphs ; i++) {
+        printf("cluster: %d, codepoint: %d\n", glyph_info[i].cluster, glyph_info[i].codepoint);
+        printf("  x=%d, y=%d, dx=%d, dy=%d\n",
+               glyph_pos[i].x_advance, glyph_pos[i].y_advance, glyph_pos[i].x_offset, glyph_pos[i].y_offset);
+    }
+}
+
 int
 main(int argc, char **argv)
 {
@@ -104,6 +136,9 @@ main(int argc, char **argv)
 					   InputOutput,
 					   DefaultVisual(display, screen),
 					   0, NULL);
+
+    char *filename = "/home/elias/.fonts/NotoSans-Regular.ttf";
+
     XRenderPictureAttributes pict_attr;
 
     pict_attr.poly_edge = PolyEdgeSmooth;
@@ -116,11 +151,13 @@ main(int argc, char **argv)
     Picture         fg_pen = create_pen(display, 0, 0, 0, 0xffff);
 
     GlyphSet        font = load_glyphset(display,
-					 "/home/user/fonts/Caladea-Bold.ttf",
+					 filename,
 					 30);
 
     XMapWindow(display, window);
     XRenderColor    bg_color = { .red = 0xffff,.green = 0xffff,.blue = 0xffff,.alpha = 0xffff };
+
+    setup_hb(filename);
 
     while (1) {
 	XEvent          event;
@@ -139,3 +176,7 @@ main(int argc, char **argv)
 
     return 0;
 }
+// Local Variables:
+// flycheck-clang-include-path: ("/usr/include/harfbuzz" "/usr/include/glib-2.0" "/usr/lib/x86_64-linux-gnu/glib-2.0/include")
+// company-clang-arguments: ("-I/usr/include/harfbuzz" "-I/usr/include/glib-2.0" "-I/usr/lib/x86_64-linux-gnu/glib-2.0/include")
+// End:
