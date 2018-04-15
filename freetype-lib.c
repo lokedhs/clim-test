@@ -1,7 +1,9 @@
 /*
- * Demonstration of Xrender-based text rendering compile with: gcc
- * `pkg-config --cflags --libs freetype2 xrender` -o rendertext
+ * Demonstration of Xrender-based text rendering compile with:
+ * cc -Wall -g `pkg-config --cflags freetype2 xrender harfbuzz` freetype-lib.c -o freetype-lib `pkg-config --libs freetype2 xrender harfbuzz`
  * rendertext.c
+ *
+ * harfbuzz example: https://github.com/lxnt/ex-sdl-freetype-harfbuzz/blob/master/ex-sdl-freetype-harfbuzz.c
  */
 
 #include <X11/Xlib.h>
@@ -9,6 +11,9 @@
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
+
+#include <hb.h>
+#include <hb-ft.h>
 
 void
 load_glyph(Display * display, GlyphSet gs, FT_Face face, int charcode)
@@ -123,9 +128,6 @@ main(int argc, char **argv)
 
 	switch (event.type) {
 	case Expose:
-	    /*
-	     * no partial repaints 
-	     */
 	    XRenderFillRectangle(display, PictOpOver, picture, &bg_color, 0, 0, 1640, 1640);
 	    XRenderCompositeString8(display, PictOpOver,
 				    fg_pen, picture, 0, font, 0, 0, 20, 50, "We are jumping over a black fox", 31);
