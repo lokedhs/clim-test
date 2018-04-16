@@ -35,4 +35,4 @@
 (defun display-text-content (frame stream)
   (declare (ignore frame))
   (let ((s (clim:make-text-style "DejaVuSans" "Book" 20)))
-    (clim:draw-text* stream "ToOAV f(x)y" 40 40 :text-style s :ink clim:+black+)))
+    (clim:draw-text* stream "aääååa⃞å⃞" 40 40 :text-style s :ink clim:+black+)))
