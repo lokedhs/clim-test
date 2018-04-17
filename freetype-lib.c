@@ -1,7 +1,6 @@
 /*
  * Demonstration of Xrender-based text rendering compile with:
  * cc -Wall -g `pkg-config --cflags freetype2 xrender harfbuzz` freetype-lib.c -o freetype-lib `pkg-config --libs freetype2 xrender harfbuzz`
- * rendertext.c
  *
  * harfbuzz example: https://github.com/lxnt/ex-sdl-freetype-harfbuzz/blob/master/ex-sdl-freetype-harfbuzz.c
  */
