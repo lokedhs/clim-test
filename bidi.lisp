@@ -276,18 +276,7 @@ Any remaining neutrals take the embedding direction."
 
 
 (defun get-category (char)
-  (nth-value 1 (cl-unicode:bidi-class char))
-  #+nil
-  (let ((categories bidi-categories)
-	(set (char-category-set char))
-	result)
-    (loop
-      while (and (not result) categories)
-            (let ((category (symbol-value (car categories))))
-	      (if (aref set category)
-	          (setq result category)
-	          (setq categories (cdr categories)))))
-    result))
+  (nth-value 1 (cl-unicode:bidi-class char)))
 
 (defun bidi-get-types (string)
   (map 'list #'get-category string))
