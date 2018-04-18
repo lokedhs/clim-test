@@ -78,7 +78,7 @@
 ;;; Maths rendering
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defvar *font-roman* '("Noto Serif" "Regular"))
+(defvar *font-roman* '("Latin Modern Math" "Regular"))
 (defvar *font-italic* '("Noto Serif" "Italic"))
 (defvar *draw-boxes* nil)
 
