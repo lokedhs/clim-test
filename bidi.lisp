@@ -2,7 +2,8 @@
 ;;; https://github.com/kensanata/emacs-bidi
 
 (defpackage :mcclim-bidi
-  (:use :cl))
+  (:use :cl)
+  (:export #:directions))
 
 (in-package :mcclim-bidi)
 
@@ -361,3 +362,26 @@ direction, those of type L, EN or AN go up one level."
 	   (setq types (cdr types))
 	   (setq levels (cdr levels))))
     result))
+
+(defun directions (string r2l-context)
+  (let ((dirdata (bidi-resolve-implicit-levels (bidi-resolve-weak-types (bidi-get-types string) r2l-context))))
+    (assert (alexandria:length= string dirdata))
+    (labels ((number-to-type (n)
+               (ecase n
+                 (0 :ltr)
+                 (1 :rtl))))
+     (let ((result nil))
+       (loop
+         with start = 0
+         with i = 0
+         for prev = nil then dir
+         for dir in dirdata
+         if (and prev (not (eql prev dir)))
+           do (progn
+                (push (cons (number-to-type prev) (subseq string start i)) result)
+                (setq start i)
+                (setq prev dir))
+         do (incf i)
+         finally (when (> (1- i) start)
+                   (push (cons (number-to-type prev) (subseq string start i)) result)))
+       result))))
