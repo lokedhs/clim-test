@@ -78,7 +78,7 @@
 ;;; Maths rendering
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defvar *font-roman* '("Noto Serif" "Regular"))
+(defvar *font-roman* '("DejaVu Math TeX Gyre" "Regular"))
 (defvar *font-italic* '("Noto Serif" "Italic"))
 (defvar *draw-boxes* nil)
 
@@ -92,52 +92,82 @@
                                    (setf (readtable-case readtable) :invert)
                                    readtable))
 
-(defmacro dimension-bind ((output-record &key
-                                           ((:width width-sym)) ((:height height-sym))
-                                           ((:x x-sym)) ((:y y-sym))
-                                           ((:right right-sym)) ((:bottom bottom-sym))
-                                           ((:baseline baseline-sym)))
-                          &body body)
-  (alexandria:with-gensyms (width height x y)
-    (alexandria:once-only (output-record)
-      (labels ((make-body ()
-                 `(progn ,@body))
-               (make-baseline ()
-                 (if baseline-sym
-                     `(let ((,baseline-sym (clim-extensions:output-record-baseline ,output-record)))
-                        ,(make-body))
-                     (make-body)))
-               (make-position-form ()
-                 (if (or x-sym y-sym right-sym bottom-sym)
-                     `(multiple-value-bind (,x ,y)
-                          (clim:output-record-position ,output-record)
-                        (declare (ignorable ,x ,y))
-                        (let (,@(if x-sym `((,x-sym ,x)))
-                              ,@(if y-sym `((,y-sym ,y)))
-                              ,@(if right-sym `((,right-sym (+ ,x ,width))))
-                              ,@(if bottom-sym `((,bottom-sym (+ ,y ,height)))))
-                          ,(make-baseline)))
-                     (make-baseline))))
-        (if (or width-sym height-sym right-sym bottom-sym)
-            `(multiple-value-bind (,width ,height)
-                 (clim:rectangle-size ,output-record)
-               (declare (ignorable ,width ,height))
-               (let (,@(if width-sym `((,width-sym ,width)))
-                     ,@(if height-sym `((,height-sym ,height))))
-                 ,(make-position-form)))
-            (make-position-form))))))
+(defclass expr ()
+  ((output-record :initarg :output-record
+                  :reader expr/output-record)))
 
-(defun set-rec-position (output-record x y)
-  (dimension-bind (output-record :x old-x :y old-y)
-    (setf (clim:output-record-position output-record)
+(defmethod initialize-instance :after ((obj expr) &key)
+  (let ((rec (expr/output-record obj)))
+    (unless (typep rec 'clim:output-record)
+      (error "Attempt to set output record to an instance of ~s" (type-of rec)))))
+
+(defun expr-position (expr)
+  (clim:output-record-position (expr/output-record expr)))
+
+(defun set-rec-position (expr x y)
+  (dimension-bind (expr :x old-x :y old-y)
+    (setf (clim:output-record-position (expr/output-record expr))
           (values (or x old-x)
                   (or y old-y)))))
 
+(defun expr-rectangle-size (expr)
+  (clim:rectangle-size (expr/output-record expr)))
+
+(defun expr-baseline (expr)
+  (clim-extensions:output-record-baseline (expr/output-record expr)))
+
+(defmacro dimension-bind ((expr &key
+                                  ((:width width-sym)) ((:height height-sym))
+                                  ((:x x-sym)) ((:y y-sym))
+                                  ((:right right-sym)) ((:bottom bottom-sym))
+                                  ((:baseline baseline-sym)))
+                          &body body)
+  (alexandria:with-gensyms (output-record width height x y)
+    (alexandria:once-only (expr)
+      `(let ((,output-record (expr/output-record ,expr)))
+         ,(labels ((make-body ()
+                     `(progn ,@body))
+                   (make-baseline ()
+                     (if baseline-sym
+                         `(let ((,baseline-sym (clim-extensions:output-record-baseline ,output-record)))
+                            ,(make-body))
+                         (make-body)))
+                   (make-position-form ()
+                     (if (or x-sym y-sym right-sym bottom-sym)
+                         `(multiple-value-bind (,x ,y)
+                              (clim:output-record-position ,output-record)
+                            (declare (ignorable ,x ,y))
+                            (let (,@(if x-sym `((,x-sym ,x)))
+                                  ,@(if y-sym `((,y-sym ,y)))
+                                  ,@(if right-sym `((,right-sym (+ ,x ,width))))
+                                  ,@(if bottom-sym `((,bottom-sym (+ ,y ,height)))))
+                              ,(make-baseline)))
+                         (make-baseline))))
+            (if (or width-sym height-sym right-sym bottom-sym)
+                `(multiple-value-bind (,width ,height)
+                     (clim:rectangle-size ,output-record)
+                   (declare (ignorable ,width ,height))
+                   (let (,@(if width-sym `((,width-sym ,width)))
+                         ,@(if height-sym `((,height-sym ,height))))
+                     ,(make-position-form)))
+                (make-position-form)))))))
+
+(defmacro with-output-to-expr ((stream) &body body)
+  (alexandria:once-only (stream)
+    (alexandria:with-gensyms (output-record)
+      `(let ((,output-record (clim:with-output-to-output-record (,stream)
+                               ,@body)))
+         (make-instance 'expr :output-record ,output-record)))))
+
+(defun add-expr-to-stream (stream expr)
+  (check-type expr expr)
+  (clim:stream-add-output-record stream (expr/output-record expr)))
+
 (defun make-boxed-output-record (stream rec)
   (if *draw-boxes*
-      (clim:with-output-to-output-record (stream)
+      (with-output-to-expr (stream)
         (dimension-bind (rec :x x :y y :right right :bottom bottom)
-          (clim:stream-add-output-record stream rec)
+          (add-expr-to-stream stream rec)
           (clim:draw-rectangle* stream x y (1- right) (1- bottom) :filled nil)))
       rec))
 
@@ -152,14 +182,12 @@
       ,@body)))
 
 (defun %aligned-render-and-move (stream pos fn)
-  (let ((output-record (clim:with-output-to-output-record (stream)
+  (let ((output-record (with-output-to-expr (stream)
                          (funcall fn))))
     (multiple-value-bind (w)
-        (clim:rectangle-size output-record)
-      (setf (clim:output-record-position output-record)
-            (values pos
-                    (- (clim-extensions:output-record-baseline output-record))))
-      (clim:stream-add-output-record stream output-record)
+        (expr-rectangle-size output-record)
+      (set-rec-position output-record pos (- (expr-baseline output-record)))
+      (add-expr-to-stream stream output-record)
       (+ pos w))))
 
 (defmacro with-aligned-rendering ((stream) &body body)
@@ -211,17 +239,17 @@
 
 (defun render-quotient (stream top-expr bottom-expr)
   (let ((fraction-spacing 2)
-        (top (clim:with-output-to-output-record (stream)
+        (top (with-output-to-expr (stream)
                (render-maxima-expression stream top-expr)))
-        (bottom (clim:with-output-to-output-record (stream)
+        (bottom (with-output-to-expr (stream)
                   (render-maxima-expression stream bottom-expr))))
     (dimension-bind (top :width top-width :height top-height)
       (dimension-bind (bottom :width bottom-width)
         (let ((max-width (max top-width bottom-width)))
           (set-rec-position top (/ (- max-width top-width) 2) 0)
-          (clim:stream-add-output-record stream top)
+          (add-expr-to-stream stream top)
           (set-rec-position bottom (/ (- max-width bottom-width) 2) (+ top-height (+ (* fraction-spacing 2) 1)))
-          (clim:stream-add-output-record stream bottom)
+          (add-expr-to-stream stream bottom)
           (let ((y (+ top-height fraction-spacing)))
             (clim:draw-line* stream 0 y max-width y)))))))
 
@@ -266,16 +294,16 @@
       (render-aligned () (render-maxima-expression stream expr)))))
 
 (defun render-expt (stream a b)
-  (let ((base (clim:with-output-to-output-record (stream)
+  (let ((base (with-output-to-expr (stream)
                 (let ((*rop* 'maxima::mexpt))
                  (render-maxima-expression stream a))))
-        (exp (clim:with-output-to-output-record (stream)
+        (exp (with-output-to-expr (stream)
                (with-font-size-change (stream 2/3)
                  (let ((*lop* 'maxima::mexpt))
                    (render-maxima-expression stream b))))))
     (dimension-bind (base :height base-height :y base-y :right base-right)
       (dimension-bind (exp :height exp-height)
-        (clim:stream-add-output-record stream (make-boxed-output-record stream base))
+        (add-expr-to-stream stream (make-boxed-output-record stream base))
         (set-rec-position exp base-right
                           (if (>= exp-height (/ base-height 2))
                               ;; exp is high enough that it needs to have the bottom aligned to
@@ -284,7 +312,7 @@
                               ;; ELSE: the top of exp should be slightly above the top of base
                               ;; For now, just align them
                               base-y))
-        (clim:stream-add-output-record stream (make-boxed-output-record stream exp))))))
+        (add-expr-to-stream stream (make-boxed-output-record stream exp))))))
 
 (defun render-plain (stream spacing ch a b)
   (with-aligned-rendering (stream)
@@ -300,33 +328,31 @@
 (defun wrap-with-parens (stream output-record)
   (multiple-value-bind (width height)
       (clim:rectangle-size output-record)
-    (let ((left-paren (clim:with-output-to-output-record (stream)
+    (let ((left-paren (with-output-to-expr (stream)
                         (clim:with-text-size (stream height)
                           (render-formatted stream "("))))
-          (right-paren (clim:with-output-to-output-record (stream)
+          (right-paren (with-output-to-expr (stream)
                          (clim:with-text-size (stream height)
                            (render-formatted stream ")")))))
       (multiple-value-bind (left-paren-width)
           (clim:rectangle-size left-paren)
-        (setf (clim:output-record-position left-paren)
-              (values 0
-                      (- (clim-extensions:output-record-baseline left-paren))))
-        (clim:stream-add-output-record stream left-paren)
+        (set-rec-position left-paren 0 (- (clim-extensions:output-record-baseline left-paren)))
+        (add-expr-to-stream stream left-paren)
         ;;
-        (setf (clim:output-record-position output-record)
-              (values left-paren-width
-                      (- (clim-extensions:output-record-baseline output-record))))
-        (clim:stream-add-output-record stream output-record)
+        (set-rec-position output-record
+                          left-paren-width
+                          (- (clim-extensions:output-record-baseline output-record)))
+        (add-expr-to-stream stream output-record)
         ;;
-        (setf (clim:output-record-position right-paren)
-              (values (+ left-paren-width width)
-                      (- (clim-extensions:output-record-baseline right-paren))))
-        (clim:stream-add-output-record stream right-paren)))))
+        (set-rec-position right-paren
+                          (+ left-paren-width width)
+                          (- (clim-extensions:output-record-baseline right-paren)))
+        (add-expr-to-stream stream right-paren)))))
 
 (defun render-function (stream name exprs)
   (with-aligned-rendering (stream)
     (render-aligned () (render-symbol stream (car name)))
-    (let ((params (clim:with-output-to-output-record (stream)
+    (let ((params (with-output-to-expr (stream)
                     (with-aligned-rendering (stream)
                       (loop
                         for expr in exprs
@@ -340,21 +366,21 @@
   (multiple-value-bind (width height final-x final-y baseline)
       (clim:text-size stream string)
     (declare (ignore width final-x final-y))
-    (let ((rec (clim:with-output-to-output-record (stream)
+    (let ((rec (with-output-to-expr (stream)
                  (clim:draw-text* stream string x y))))
       (list rec baseline (- height baseline)))))
 
 (defun render-sum (stream f var from to)
-  (let* ((bottom (clim:with-output-to-output-record (stream)
+  (let* ((bottom (with-output-to-expr (stream)
                    (with-aligned-rendering (stream)
                      (with-paren-op
                        (render-aligned () (render-maxima-expression stream var))
                        (render-aligned () (render-formatted stream "="))
                        (render-aligned () (render-maxima-expression stream from))))))
-         (top    (clim:with-output-to-output-record (stream)
+         (top    (with-output-to-expr (stream)
                    (with-paren-op
                      (render-maxima-expression stream to))))
-         (exp    (clim:with-output-to-output-record (stream)
+         (exp    (with-output-to-expr (stream)
                    (let ((*lop* 'maxima::%sum))
                      (render-maxima-expression stream f)))))
     (dimension-bind (exp :height exp-height)
@@ -365,26 +391,26 @@
           (let ((sigma-top (- sigma-ascent))
                 (sigma-bottom sigma-descent)
                 (sigma-height (+ sigma-ascent sigma-descent)))
-            (clim:stream-add-output-record stream (make-boxed-output-record stream sigma))
+            (add-expr-to-stream stream (make-boxed-output-record stream sigma))
             ;;
             (dimension-bind (bottom :width bottom-width)
               (set-rec-position bottom
                                 (+ sigma-x (/ (- sigma-width bottom-width) 2))
                                 sigma-bottom)
-              (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))
+              (add-expr-to-stream stream (make-boxed-output-record stream bottom)))
             ;;
             (dimension-bind (top :width top-width :height top-height)
               (set-rec-position top
                                 (/ (- sigma-width top-width) 2)
                                 (- sigma-top top-height))
-              (clim:stream-add-output-record stream (make-boxed-output-record stream top)))
+              (add-expr-to-stream stream (make-boxed-output-record stream top)))
             ;;
             (dimension-bind (exp :height exp-height)
               (set-rec-position exp sigma-right (+ sigma-top (/ (- sigma-height exp-height) 2)))
-              (clim:stream-add-output-record stream (make-boxed-output-record stream exp)))))))))
+              (add-expr-to-stream stream (make-boxed-output-record stream exp)))))))))
 
 (defun render-sqrt (stream expr)
-  (let ((exp (clim:with-output-to-output-record (stream)
+  (let ((exp (with-output-to-expr (stream)
                (let ((*lop* 'maxima::mparen))
                  (render-maxima-expression stream expr)))))
     (dimension-bind (exp :height height :x x :y y :bottom bottom :right right)
@@ -397,7 +423,7 @@
                                                             x y
                                                             right y))
                           :line-thickness 2)
-        (clim:stream-add-output-record stream exp)))))
+        (add-expr-to-stream stream exp)))))
 
 (defun render-maxima-expression (stream expr)
   (labels ((render-inner (fixed)
@@ -420,7 +446,7 @@
         (symbol (render-symbol stream fixed))
         (list (if (or (<= (maxima::lbp (caar fixed)) (maxima::rbp *lop*))
                       (<= (maxima::rbp (caar fixed)) (maxima::lbp *rop*)))
-                  (let ((output-record (clim:with-output-to-output-record (stream)
+                  (let ((output-record (with-output-to-expr (stream)
                                          (render-inner fixed))))
                     (wrap-with-parens stream output-record))
                   (render-inner fixed)))))))
