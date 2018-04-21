@@ -67,6 +67,10 @@
   (let ((frame (clim:make-application-frame 'foo-frame)))
     (clim:run-frame-top-level frame)))
 
+(defun draw-x (stream x y &optional (size 5))
+  (clim:draw-line* stream (- x size) (- y size) (+ x size) (+ y size))
+  (clim:draw-line* stream (- x size) (+ y size) (+ x size) (- y size)))
+
 (defun display-text-content (frame stream)
   (declare (ignore frame))
   (let ((text "FoojA")
@@ -86,7 +90,9 @@
               (values 60 200))
         (clim:stream-add-output-record stream rec)
         (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
-                        (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+blue+))))))
+                        (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+blue+))
+        (draw-x stream 60 200)
+        (clim:draw-text* stream "abc" 180 200)))))
 
 (defmethod clim-clx::font-draw-glyphs :around ((font clim-freetype::freetype-font) mirror gc x y string
                                                &key (start 0) (end (length string))
