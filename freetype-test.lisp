@@ -71,8 +71,20 @@
   (clim:draw-line* stream (- x size) (- y size) (+ x size) (+ y size))
   (clim:draw-line* stream (- x size) (+ y size) (+ x size) (- y size)))
 
-(defun display-text-content (frame stream)
-  (declare (ignore frame))
+(defun draw-rotated-text (stream)
+  (let ((text "abcdefgh")
+        (x 40)
+        (y 60))
+    (clim:with-drawing-options (stream :transformation (clim:make-rotation-transformation* 0.4 x y)
+                                       :text-style (clim:make-text-style "DejaVu Sans" "Regular" 72))
+      (clim:draw-text* stream text x y)
+      (multiple-value-bind (width height w baseline ascent)
+          (clim:text-size stream text)
+        (declare (ignore w baseline))
+        (clim:draw-rectangle* stream x (- y ascent) (+ x width) (+ y (- height ascent))
+                              :filled nil :ink clim:+red+)))))
+
+(defun draw-simple-text (stream)
   (let ((text "FoojA")
         (x 40)
         (y 40)
@@ -82,7 +94,8 @@
       (multiple-value-bind (width height w baseline ascent)
           (clim:text-size stream text)
         (declare (ignorable width height w baseline ascent))
-        (clim:draw-rectangle* stream x (- y ascent) (+ x width) (+ y (- height ascent)) :filled nil :ink clim:+red+))
+        (clim:draw-rectangle* stream x (- y ascent) (+ x width) (+ y (- height ascent))
+                              :filled nil :ink clim:+red+))
       ;;
       (let ((rec (clim:with-output-to-output-record (stream)
                    (clim:draw-text* stream text 0 0 :ink clim:+black+))))
@@ -90,15 +103,18 @@
               (values 60 200))
         (clim:stream-add-output-record stream rec)
         (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
-                        (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+blue+))
-        (draw-x stream 60 200)
-        (clim:draw-text* stream "abc" 180 200)))))
+          (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+blue+))
+        (draw-x stream 60 200)))))
+
+(defun display-text-content (frame stream)
+  (declare (ignore frame))
+  #+nil
+  (draw-simple-text stream)
+  (draw-rotated-text stream))
 
 (defmethod clim-clx::font-draw-glyphs :around ((font clim-freetype::freetype-font) mirror gc x y string
                                                &key (start 0) (end (length string))
-                                                 translate size (direction :ltr))
-  (declare (ignore translate size))
-  (log:info "Intercepting: ~s" string)
+                                                 translate size (direction :ltr) transformation)
   (loop
     with parts = (mcclim-bidi:directions (subseq string start end) (ecase direction
                                                                      (:ltr nil)
@@ -108,6 +124,33 @@
     do (multiple-value-bind (width ascent descent left right font-ascent font-descent dir first-not-done)
            (clim-clx::font-text-extents font s)
          (declare (ignore width ascent descent left font-ascent font-descent dir first-not-done))
-         (log:info "Drawing part at: ~f (next skip: ~f)" dx right)
-         (call-next-method font mirror gc dx y s :direction part-direction)
+         (call-next-method font mirror gc dx y s
+                           :direction part-direction :transformation transformation
+                           :translate translate :size size)
          (incf dx right))))
+
+(defmethod clim-clx::font-text-extents :around ((font clim-freetype::freetype-font) string
+                                                &key (start 0) (end (length string))
+                                                  translate (direction :ltr))
+  (loop
+    with parts = (mcclim-bidi:directions (subseq string start end) (ecase direction
+                                                                     (:ltr nil)
+                                                                     (:rlt t)))
+    with dx = 0
+    with max-ascent = 0
+    with max-descent = 0
+    with max-font-ascent = 0
+    with max-font-descent = 0
+    for (part-direction . s) in parts
+    do (progn
+         (multiple-value-bind (width ascent descent left right font-ascent font-descent)
+             (call-next-method font s
+                               :direction part-direction
+                               :translate translate)
+           (declare (ignore width left))
+           (setq max-ascent (max max-ascent ascent))
+           (setq max-descent (max max-descent descent))
+           (setq max-font-ascent (max max-font-ascent font-ascent))
+           (setq max-font-descent (max max-font-descent font-descent))
+           (incf dx right)))
+    finally (return (values dx max-ascent max-descent 0 dx max-font-ascent max-font-descent 0 end))))
