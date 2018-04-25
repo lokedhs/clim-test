@@ -8,13 +8,6 @@
   (unless (find-package "CLIM")
     (sb-ext:restrict-compiler-policy 'safety 3)
     (sb-ext:restrict-compiler-policy 'debug 3)
-    #+nil(dolist (p (mapcar #'pathname-directory (directory #p"/home/emartenson/prog/McCLIM-gtk/**/*.asd")))
-           (pushnew (make-pathname :directory p) asdf:*central-registry* :test #'equal))
-    #+nil
-    (dolist (p (mapcar #'pathname-directory (directory #p"/home/emartenson/src/McCLIM-xkb/**/*.asd")))
-      (pushnew (make-pathname :directory p) asdf:*central-registry* :test #'equal))
-    (unless (find-package "LOG4CL")
-      (ql:quickload "log4cl"))
     (ql:quickload "mcclim")
     #+nil(ql:quickload "mcclim-gtkairo"))
   (unless (find-package "LOG4CL")
