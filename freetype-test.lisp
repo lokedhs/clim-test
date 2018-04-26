@@ -75,7 +75,9 @@
   (let ((text "abcdefgh")
         (x 40)
         (y 60))
-    (clim:with-drawing-options (stream :transformation (clim:make-rotation-transformation* 0.4 x y)
+    (clim:with-drawing-options (stream :transformation (clim:compose-translation-with-transformation 
+                                                        (clim:make-rotation-transformation* 0.4 x y)
+                                                        100 100)
                                        :text-style (clim:make-text-style "DejaVu Sans" "Regular" 72))
       (clim:draw-text* stream text x y)
       (multiple-value-bind (width height w baseline ascent)
@@ -110,7 +112,10 @@
   (declare (ignore frame))
   #+nil
   (draw-simple-text stream)
-  (draw-rotated-text stream))
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (draw-rotated-text stream))))
+    (clim:stream-add-output-record stream rec)
+    (clim:replay (clim:stream-output-history stream) stream)))
 
 (defmethod clim-clx::font-draw-glyphs :around ((font clim-freetype::freetype-font) mirror gc x y string
                                                &key (start 0) (end (length string))
