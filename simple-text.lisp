@@ -1,8 +1,10 @@
-(defpackage :simple-test
+(defpackage :simple-text
   (:use :cl)
   (:export #:open-foo-frame))
 
-(in-package :simple-test)
+(in-package :simple-text)
+
+(declaim (optimize (speed 0) (safety 3) (debug 3)))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "CLIM")
@@ -12,22 +14,20 @@
   (unless (find-package "LOG4CL")
     (ql:quickload "log4cl")))
 
-(defun draw-rotated-rectangle (stream x y colour)
-  (clim:with-drawing-options (stream :transformation (clim:make-rotation-transformation* 0.5))
-    (clim:draw-rectangle* stream x y (+ x 100) (+ y 50) :ink colour :filled nil)))
+(defun draw-test-rectangle (stream x y colour)
+  (clim:draw-rectangle* stream x y (+ x 100) (+ y 50) :ink colour :filled nil))
 
 (defun display-text-content (frame stream)
-  (declare (ignore frame))
-  (draw-rotated-rectangle stream 10 10 clim:+green+)
+  (declare (ignore frame)) 
+  (draw-test-rectangle stream 10 10 clim:+green+)
   (let ((rec (clim:with-output-to-output-record (stream)
-               (draw-rotated-rectangle stream 50 50 clim:+blue+))))
+               (draw-test-rectangle stream 50 50 clim:+blue+))))
     (clim:stream-add-output-record stream rec)))
 
 (clim:define-application-frame foo-frame ()
   ()
   (:panes (text-content :application
-                        :display-function 'display-text-content
-                        :redisplay-on-resize-p t)
+                        :display-function 'display-text-content)
           (interaction-pane :interactor))
   (:layouts (default (clim:vertically ()
                        text-content
