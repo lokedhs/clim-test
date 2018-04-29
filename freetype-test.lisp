@@ -64,7 +64,7 @@
                        interaction-pane))))
 
 (defun open-foo-frame ()
-  (let ((frame (clim:make-application-frame 'foo-frame)))
+  (let ((frame (clim:make-application-frame 'foo-frame :width 700 :height 800)))
     (clim:run-frame-top-level frame)))
 
 (defun draw-x (stream x y &optional (size 5))
@@ -108,14 +108,32 @@
           (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+blue+))
         (draw-x stream 60 200)))))
 
+(defun draw-transform-box (stream)
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (clim:with-drawing-options (stream :transformation (clim:compose-translation-with-transformation
+                                                                   (clim:make-rotation-transformation* 0.4 50 100)
+                                                                   10 20)
+                                                  :text-style (clim:make-text-style "Noto Sans Devanagari" "Book" 12))
+                 #+nil(clim:draw-rectangle* stream 50 100 200 150 :filled nil)
+                 (clim:draw-text* stream "यह CLIM में हिंदी का एक परीक्षण है" 50 100 :text-size 48)))))
+    (clim:stream-add-output-record stream rec)
+    (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
+      (log:info "dimensions from dimension-bind: (~f,~f)-(~f,~f)" x1 y1 x2 y2)
+      (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+green+))))
+
 (defun display-text-content (frame stream)
   (declare (ignore frame))
   #+nil
   (draw-simple-text stream)
+  (draw-transform-box stream)
+  #+nil
   (let ((rec (clim:with-output-to-output-record (stream)
                (draw-rotated-text stream))))
     (clim:stream-add-output-record stream rec)
-    (clim:replay (clim:stream-output-history stream) stream)))
+    (clim:replay (clim:stream-output-history stream) stream)
+    (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
+      (log:info "dimensions from dimension-bind: (~f,~f)-(~f,~f)" x1 y1 x2 y2)
+      (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+green+))))
 
 (defmethod clim-clx::font-draw-glyphs :around ((font clim-freetype::freetype-font) mirror gc x y string
                                                &key (start 0) (end (length string))
