@@ -390,31 +390,31 @@
       (destructuring-bind (sigma sigma-ascent sigma-descent)
           (clim:with-text-size (stream (+ 10 exp-height))
             (render-and-measure-string stream (format nil "~c" symbol)))
-        (dimension-bind (sigma :width sigma-width :right sigma-right :x sigma-x)
-          (let ((sigma-top (- sigma-ascent))
-                (sigma-bottom sigma-descent)
-                (sigma-height (+ sigma-ascent sigma-descent))
-                (centre (- (/ (+ sigma-ascent sigma-descent) 2) (/ (char-height stream) 2))))
-            (move-rec sigma 0 centre)
+        (dimension-bind (sigma :width sigma-width :height sigma-height :right sigma-right :x sigma-x :y sigma-y)
+          (let ((centre (+ (/ sigma-height 2)
+                           (/ (char-height stream) 2)
+                           sigma-y)))
+            ;; centre is the y coordinate where the baseline should be located, so we move sigma
+            ;; it is a negative value indicating the number of pixels above the baseline of the sigma itself
+            (move-rec sigma 0 (- centre))
             (clim:stream-add-output-record stream (make-boxed-output-record stream sigma))
             ;;
             (dimension-bind (bottom :width bottom-width)
               (set-rec-position bottom
                                 (+ sigma-x (/ (- sigma-width bottom-width) 2))
-                                (+ sigma-bottom centre))
+                                ;; centre is negative, so subtracting that value from sigma-descent
+                                ;; moves the bottom rec downards to compensate for the adjustment of sigma
+                                (- sigma-descent centre))
               (clim:stream-add-output-record stream (make-boxed-output-record stream bottom)))
             ;;
             (dimension-bind (top :width top-width :height top-height)
               (set-rec-position top
                                 (/ (- sigma-width top-width) 2)
-                                (+ (- sigma-top top-height) centre))
+                                (- 0 sigma-ascent top-height))
               (clim:stream-add-output-record stream (make-boxed-output-record stream top)))
             ;;
-            (dimension-bind (exp :height exp-height)
-              (set-rec-position exp
-                                (+ sigma-right 2)
-                                (+ sigma-top (/ (- sigma-height exp-height) 2) centre))
-              (clim:stream-add-output-record stream (make-boxed-output-record stream exp)))
+            (set-rec-position exp (+ sigma-right 2) nil)
+            (clim:stream-add-output-record stream (make-boxed-output-record stream exp))
             ;;
             (when sym2
               (let ((variable (clim:with-output-to-output-record (stream)
