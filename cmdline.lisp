@@ -439,6 +439,9 @@
 (defun render-integrate (stream f var from to)
   (render-intsum stream f nil from to #\INTEGRAL var))
 
+(defun render-product (stream f var from to)
+  (render-intsum stream f var from to #\GREEK_CAPITAL_LETTER_PI nil))
+
 (defun render-sqrt (stream expr)
   (let ((exp (clim:with-output-to-output-record (stream)
                (let ((*lop* 'maxima::mparen))
@@ -468,6 +471,7 @@
                (maxima::mequal (render-equal stream (second fixed) (third fixed)))
                (maxima::%sum (render-sum stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::%integrate (render-integrate stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
+               (maxima::%product (render-product stream (second fixed) (third fixed) (fourth fixed) (fifth fixed)))
                (maxima::%sqrt (render-sqrt stream (second fixed)))
                (t (render-function stream (car fixed) (cdr fixed))))))
     (let ((fixed (maxima::nformat-check expr)))
