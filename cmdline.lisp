@@ -59,7 +59,17 @@
 (clim:define-command (maxima-eval :name "Run command" :menu t :command-table maxima-commands)
     ((cmd 'string :prompt "command"))
   (log:info "eval command. form=~s" cmd)
+  #+nil
+  (let ((rec (clim:with-output-to-output-record (*standard-output*)
+               (clim:with-text-style (*standard-output* (clim:make-text-style "DejaVu Sans" "Book" 12))
+                 (clim:draw-line* *standard-output* 0 0 100 50)
+                 (clim:draw-text* *standard-output* "Foo" 100 10)))))
+    (clim:with-room-for-graphics (*standard-output*)
+      (clim:stream-add-output-record *standard-output* rec)))
   (clim:with-room-for-graphics (*standard-output*)
     (clim:with-text-style (*standard-output* (clim:make-text-style "DejaVu Sans" "Book" 12))
       (clim:draw-line* *standard-output* 0 0 100 50)
       (clim:draw-text* *standard-output* "Foo" 100 10))))
+
+(defun maxima::$plotclim (&rest foo)
+  (log:info "Got params: ~s" foo))

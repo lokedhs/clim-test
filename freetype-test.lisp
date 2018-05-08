@@ -119,7 +119,8 @@
     (clim:stream-add-output-record stream rec)
     (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
       (log:info "dimensions from dimension-bind: (~f,~f)-(~f,~f)" x1 y1 x2 y2)
-      (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+green+))))
+      (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+green+))
+    (clim:replay rec stream)))
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
