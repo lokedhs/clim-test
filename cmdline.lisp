@@ -12,6 +12,17 @@
   (unless (find-package "LOG4CL")
     (ql:quickload "log4cl")))
 
+(defun present-to-stream (obj stream)
+  (clim:present obj (clim:presentation-type-of obj) :stream stream))
+
+(defclass foo-argument ()
+  ((content :initarg :content
+            :reader foo-argument/content)))
+
+(defmethod print-object ((obj foo-argument) stream)
+  (print-unreadable-object (obj stream :type t)
+    (format stream "~s" (foo-argument/content obj))))
+
 (clim:define-command-table maxima-commands)
 
 (defclass maxima-interactor-view (clim:textual-view)
@@ -36,11 +47,10 @@
   (multiple-value-bind (object type)
       (let ((clim:*command-dispatchers* '(#\;)))
         (clim:with-text-style (stream (clim:make-text-style :fix :roman :normal))
-          (clim:accept 'string :stream stream :prompt nil :default "" :default-type 'string)))
+          (clim:accept 'foo-argument :stream stream :prompt nil :default nil :default-type 'foo-argument)))
     (log:info "Got input: object=~s, type=~s" object type)
-    (let ((expression (string-trim " " object)))
-      (unless (equal expression "")
-        `(maxima-eval ,expression)))))
+    (when object
+      `(maxima-eval ,object))))
 
 (defmethod clim:stream-present :around ((stream maxima-interactor-pane) object type
                                    &rest args
@@ -50,26 +60,22 @@
 
 (defun print-listener-prompt (stream frame)
   (declare (ignore frame))
-  (format stream "maxima> "))
+  (format stream "foo> "))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'maxima-main-frame)))
     (clim:run-frame-top-level frame)))
 
-(clim:define-command (maxima-eval :name "Run command" :menu t :command-table maxima-commands)
-    ((cmd 'string :prompt "command"))
-  (log:info "eval command. form=~s" cmd)
-  #+nil
-  (let ((rec (clim:with-output-to-output-record (*standard-output*)
-               (clim:with-text-style (*standard-output* (clim:make-text-style "DejaVu Sans" "Book" 12))
-                 (clim:draw-line* *standard-output* 0 0 100 50)
-                 (clim:draw-text* *standard-output* "Foo" 100 10)))))
-    (clim:with-room-for-graphics (*standard-output*)
-      (clim:stream-add-output-record *standard-output* rec)))
-  (clim:with-room-for-graphics (*standard-output*)
-    (clim:with-text-style (*standard-output* (clim:make-text-style "DejaVu Sans" "Book" 12))
-      (clim:draw-line* *standard-output* 0 0 100 50)
-      (clim:draw-text* *standard-output* "Foo" 100 10))))
+(clim:define-presentation-method clim:accept ((type foo-argument) stream (view clim:textual-view) &key)
+  (let ((s (clim:accept 'string :stream stream :view view :prompt nil :history 'foo-argument)))
+    (make-instance 'foo-argument :content s)))
 
-(defun maxima::$plotclim (&rest foo)
-  (log:info "Got params: ~s" foo))
+(clim:define-presentation-method clim:present (obj (type foo-argument) stream (view t) &key)
+  (clim:with-room-for-graphics (*standard-output* :first-quadrant nil)
+    (clim:surrounding-output-with-border (*standard-output*)
+      (clim:draw-text* *standard-output* (if obj (foo-argument/content obj) "nil") 0 0 :ink clim:+green+))))
+
+(clim:define-command (maxima-eval :name "Run command" :menu t :command-table maxima-commands)
+    ((argument 'foo-argument :prompt "command"))
+  (format t "Argument:")
+  (present-to-stream argument *standard-output*))
