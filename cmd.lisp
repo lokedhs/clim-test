@@ -39,7 +39,7 @@
             :accessor foo-frame/objects))
   (:panes (text-content :application
                         :display-function 'display-text-content
-                        :view +foo-view+)
+                        :default-view +foo-view+)
           (interaction-pane :interactor))
   (:command-table (foo-frame :inherit-from (foo-commands)))
   (:layouts (default (clim:vertically ()
