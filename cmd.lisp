@@ -20,7 +20,12 @@
     ((value :type string
             :initarg :value
             :initform "foo"
-            :reader foo/value))))
+            :reader foo/value)))
+
+  (defclass foo-view (clim:textual-view)
+    ()))
+
+(defvar +foo-view+ (make-instance 'foo-view))
 
 (clim:define-command-table foo-commands)
 
@@ -33,7 +38,8 @@
   ((values :initform nil
             :accessor foo-frame/objects))
   (:panes (text-content :application
-                        :display-function 'display-text-content)
+                        :display-function 'display-text-content
+                        :view +foo-view+)
           (interaction-pane :interactor))
   (:command-table (foo-frame :inherit-from (foo-commands)))
   (:layouts (default (clim:vertically ()
@@ -51,11 +57,19 @@
   (log:info "Calling command translator for: ~s" object)
   (make-instance 'foo :value object))
 
-(clim:define-presentation-method clim:present (obj (type foo) stream (view t) &key)
+(clim:define-presentation-translator string-to-foo (foo string foo-commands)
+    (object)
+  (log:info "Transforming foo to string: ~s" object)
+  (foo/value object))
+
+(clim:define-presentation-method clim:present (obj (type foo) stream (view foo-view) &key)
   (let ((value (foo/value obj)))
     (clim:with-room-for-graphics (stream :first-quadrant nil)
       (clim:draw-text* stream value 0 0)
       (clim:draw-line* stream 0 0 50 0))))
+
+(clim:define-presentation-method clim:present (obj (type foo) stream (view clim:textual-view) &key)
+  (format stream "~a" (foo/value obj)))
 
 (clim:define-command (show-object-command :name "Show object" :menu t :command-table foo-commands)
     ((obj 'foo :prompt "Object")
