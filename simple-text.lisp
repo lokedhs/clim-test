@@ -17,22 +17,30 @@
 (defun draw-test-rectangle (stream x y colour)
   (clim:draw-rectangle* stream x y (+ x 100) (+ y 50) :ink colour :filled nil))
 
+(defun draw-x (stream x y)
+  (clim:draw-line* stream (- x 5) (- y 5) (+ x 5) (+ y 5) :ink clim:+blue+)
+  (clim:draw-line* stream (- x 5) (+ y 5) (+ x 5) (- y 5) :ink clim:+blue+))
+
+(defun xdisplay-text-content (frame stream)
+  (declare (ignore frame))
+  (draw-x stream 50 100)
+  (clim:draw-text* stream "Foo" 50 100 :transformation (clim:make-rotation-transformation* 0.3 50 100)))
+
 (defun display-text-content (frame stream)
   (declare (ignore frame)) 
-  (draw-test-rectangle stream 10 10 clim:+green+)
-  (let ((rec (clim:with-output-to-output-record (stream)
-               (draw-test-rectangle stream 50 50 clim:+blue+))))
-    (clim:stream-add-output-record stream rec)))
+  (loop
+    for i from 0 below 200
+    do (format stream "This is line ~d. Lots of text ~r. Even more text here to fill the entire window.~%" i i)))
 
 (clim:define-application-frame foo-frame ()
   ()
   (:panes (text-content :application
-                        :display-function 'display-text-content)
-          (interaction-pane :interactor))
+                        :display-function 'display-text-content))
   (:layouts (default (clim:vertically ()
-                       text-content
-                       interaction-pane))))
+                       text-content))))
 
 (defun open-foo-frame ()
-  (let ((frame (clim:make-application-frame 'foo-frame)))
+  (let ((frame (clim:make-application-frame 'foo-frame
+                                            :width 800
+                                            :height 800)))
     (clim:run-frame-top-level frame)))
