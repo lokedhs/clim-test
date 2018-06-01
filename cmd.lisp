@@ -23,7 +23,13 @@
             :reader foo/value)))
 
   (defclass foo-view (clim:textual-view)
-    ()))
+    ())
+
+  (defclass bar ()
+    ((value :type string
+            :initarg :value
+            :initform "Default content"
+            :reader bar/value))))
 
 (defvar +foo-view+ (make-instance 'foo-view))
 
@@ -71,6 +77,18 @@
 (clim:define-presentation-method clim:present (obj (type foo) stream (view clim:textual-view) &key)
   (format stream "~a" (foo/value obj)))
 
+(clim:define-presentation-method clim:present (obj (type bar) stream (view foo-view) &key)
+  (let ((value (bar/value obj)))
+    (clim:with-room-for-graphics (stream :first-quadrant nil)
+      (clim:surrounding-output-with-border (stream)
+        (clim:with-drawing-options (stream :text-size 30)
+          (multiple-value-bind (width)
+              (clim:text-size stream value)
+            (clim:draw-text* stream value 10 50 :text-size 30)
+            (let ((x (+ 10 width 5)))
+              (clim:with-output-as-gadget (stream :x x :y 0)
+                (clim:make-pane 'clim:push-button :label "Bar")))))))))
+
 (clim:define-command (show-object-command :name "Show object" :menu t :command-table foo-commands)
     ((obj 'foo :prompt "Object")
      (text 'string :prompt "Text"))
@@ -80,3 +98,11 @@
 (clim:define-command (show-string-object-command :name "Show string object" :menu t :command-table foo-commands)
     ((value 'string :prompt "Value"))
   (push (make-instance 'foo :value value) (foo-frame/objects clim:*application-frame*)))
+
+(clim:define-command (show-bar-object-command :name "Show bar object" :menu t :command-table foo-commands)
+    ((value 'string :prompt "Value"))
+  (push (make-instance 'bar :value value) (foo-frame/objects clim:*application-frame*)))
+
+(clim:define-command (show-default-bar-object-command :name "Bar default" :menu t :command-table foo-commands)
+    ()
+  (show-bar-object-command "Example content here"))
