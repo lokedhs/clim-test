@@ -57,11 +57,9 @@
   (:panes (text-content :application
                         :default-view 'text-content-view
                         :display-function 'display-text-content
-                        :redisplay-on-resize-p t)
-          (interaction-pane :interactor))
+                        :redisplay-on-resize-p t))
   (:layouts (default (clim:vertically ()
-                       text-content
-                       interaction-pane))))
+                       text-content))))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame :width 700 :height 800)))
@@ -73,4 +71,19 @@
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (clim:draw-line* stream 10 10 150 50 :line-thickness 5))
+  (loop
+    for i from 1 to 20
+    do (progn
+         (clim:draw-line* stream
+                          (+ 10 (* i 30)) 10
+                          (+ 10 (* i 30)) 50
+                          :line-thickness i)
+         (clim:draw-line* stream
+                          (+ 10 (* i 30)) 70
+                          (+ 50 (* i 30)) 120
+                          :line-thickness i)
+         (clim:draw-line* stream
+                          10 (+ (* i 30) 150)
+                          400 (+ (* i 30) 150)
+                          :line-thickness i)
+         (clim:draw-text* stream (format nil "~2d" i) 420 (+ (* i 30) 150)))))

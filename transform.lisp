@@ -5,12 +5,12 @@
 (in-package :transform-test)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (find-package "LOG4CL")
+    (ql:quickload "log4cl"))
   (unless (find-package "CLIM")
     (sb-ext:restrict-compiler-policy 'safety 3)
     (sb-ext:restrict-compiler-policy 'debug 3)
-    (ql:quickload "mcclim"))
-  (unless (find-package "LOG4CL")
-    (ql:quickload "log4cl")))
+    (ql:quickload "mcclim")))
 
 (defun present-to-stream (obj stream)
   (clim:present obj (clim:presentation-type-of obj) :stream stream))

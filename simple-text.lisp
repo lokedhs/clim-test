@@ -8,8 +8,10 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (unless (find-package "CLIM")
-    (sb-ext:restrict-compiler-policy 'safety 3)
-    (sb-ext:restrict-compiler-policy 'debug 3)
+    #+sbcl
+    (progn
+      (sb-ext:restrict-compiler-policy 'safety 3)
+      (sb-ext:restrict-compiler-policy 'debug 3))
     (ql:quickload "mcclim"))
   (unless (find-package "LOG4CL")
     (ql:quickload "log4cl")))
