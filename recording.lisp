@@ -25,9 +25,24 @@
 (defclass foo ()
   ())
 
+(defun add-recording (stream)
+  ;; Create the underlying object for the presentation
+  (let ((x (make-instance 'foo))
+        (p (make-instance 'clim:standard-sequence-output-record)))
+    (clim:with-output-as-presentation (stream x 'foo-data
+                                              :view (clim:stream-default-view stream)
+                                              :allow-sensitive-inferiors t
+                                              :record-type 'clim:standard-presentation
+                                              :parent p)
+      (clim:with-room-for-graphics (stream :first-quadrant nil)
+        (clim:draw-text* stream "Foo" 30 30)
+        (clim:draw-line* stream 40 40 100 60 :ink clim:+blue+)))
+    #+nil
+    (clim:stream-add-output-record stream p)))
+
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (format stream "Test content"))
+  (format stream "Test content~%"))
 
 (clim:define-application-frame foo-frame ()
   ()
@@ -46,16 +61,4 @@
 
 (clim:define-command (add-presentation :name "Add presentation" :menu t :command-table foo-frame)
     ()
-  ;; Create the underlying object for the presentation
-  (let* ((stream (clim:find-pane-named clim:*application-frame* 'interaction-pane))
-         (x (make-instance 'foo))
-         (p (make-instance 'clim:standard-sequence-output-record)))
-    (clim:with-output-as-presentation (stream x 'foo-data
-                                              :view (clim:stream-default-view stream)
-                                              :allow-sensitive-inferiors t
-                                              :record-type 'clim:standard-presentation
-                                              :parent p)
-      (clim:with-room-for-graphics (stream :first-quadrant nil)
-        (clim:draw-text* stream "Foo" 30 30)
-        (clim:draw-line* stream 40 40 100 60 :ink clim:+blue+)))
-    (clim:stream-add-output-record stream p)))
+  (add-recording (clim:find-pane-named clim:*application-frame* 'interaction-pane)))
