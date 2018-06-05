@@ -15,9 +15,10 @@
 (defun present-to-stream (obj stream)
   (clim:present obj (clim:presentation-type-of obj) :stream stream))
 
-(defclass foo-argument ()
-  ((content :initarg :content
-            :reader foo-argument/content)))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+ (defclass foo-argument ()
+   ((content :initarg :content
+             :reader foo-argument/content))))
 
 (defmethod print-object ((obj foo-argument) stream)
   (print-unreadable-object (obj stream :type t)

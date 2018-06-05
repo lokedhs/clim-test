@@ -76,6 +76,10 @@
     do (progn
          (clim:draw-line* stream
                           (+ 10 (* i 30)) 10
+                          (+ 10 (* i 30)) 14
+                          :line-thickness 1)
+         (clim:draw-line* stream
+                          (+ 10 (* i 30)) 15
                           (+ 10 (* i 30)) 50
                           :line-thickness i)
          (clim:draw-line* stream
@@ -84,6 +88,10 @@
                           :line-thickness i)
          (clim:draw-line* stream
                           10 (+ (* i 30) 150)
-                          400 (+ (* i 30) 150)
+                          390 (+ (* i 30) 150)
                           :line-thickness i)
+         (clim:draw-line* stream
+                          392 (+ (* i 30) 150)
+                          400 (+ (* i 30) 150)
+                          :line-thickness 1)
          (clim:draw-text* stream (format nil "~2d" i) 420 (+ (* i 30) 150)))))

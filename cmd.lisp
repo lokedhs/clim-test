@@ -86,8 +86,10 @@
               (clim:text-size stream value)
             (clim:draw-text* stream value 10 50 :text-size 30)
             (let ((x (+ 10 width 5)))
-              (clim:with-output-as-gadget (stream :x x :y 0)
-                (clim:make-pane 'clim:push-button :label "Bar")))))))))
+              (clim:updating-output (stream)
+                (clim:with-output-as-gadget (stream :x x :y 0)
+                  #+nil (clim:make-pane 'clim:push-button-pane :label "Bar")
+                  (clim:make-pane 'drei:drei-pane :height 10))))))))))
 
 (clim:define-command (show-object-command :name "Show object" :menu t :command-table foo-commands)
     ((obj 'foo :prompt "Object")
