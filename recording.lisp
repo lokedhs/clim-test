@@ -42,7 +42,8 @@
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (format stream "Test content~%"))
+  (format stream "Test content~%")
+  (add-recording stream))
 
 (clim:define-application-frame foo-frame ()
   ()
