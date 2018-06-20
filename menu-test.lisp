@@ -151,7 +151,7 @@
     (let* ((associated-frame clim:*application-frame*)
            (fm (clim:frame-manager associated-frame)))
       (clim:with-look-and-feel-realization (fm associated-frame)
-        (let* ((menu-pane (clim:make-pane-1 fm associated-frame 'clim:application-pane))
+        (let* ((menu-pane (clim:make-pane-1 fm associated-frame 'clim:clim-stream-pane))
                (menu-container (clim:scrolling (:scroll-bar :vertical) menu-pane))
                (frame (clim-internals::make-menu-frame (clim-internals::raising ()
                                                          (clim:labelling (:label "Completions" :name 'label :label-alignment :top)
