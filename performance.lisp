@@ -27,9 +27,13 @@
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (loop
-    for x from 0 to 200
-    do (princ (format nil "Line with number ~s: Some text ~r. Test foo test. Test foo test. Test foo test.~%" x x) stream)))
+  (let ((rec (clim:with-output-to-output-record (stream)
+               (loop
+                 for x from 0 to 200
+                 do (format stream "Line with number ~s: Some text ~r. Test foo test. Test foo test. Test foo test.~%" x x)))))
+    (clim:with-room-for-graphics (stream)
+      (clim:stream-add-output-record stream rec)))
+  (format stream "hello~%"))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'main-frame

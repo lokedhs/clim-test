@@ -44,7 +44,7 @@
   (declare (ignore frame))
   (let ((text-style #+nil(clim-extensions:font-face-text-style face 14)
                     (clim-internals::make-text-style "Noto Serif" "Regular" 19)))
-    (clim:draw-text* stream (format nil "Test content: ~c" #\GREEK_CAPITAL_LETTER_SIGMA) 100 100
+    (clim:draw-text* stream (format nil "Test content: ~c" #\SQUARE_ROOT) 100 100
                      :text-style text-style)))
 
 (defun open-foo-frame ()
