@@ -68,32 +68,10 @@
 
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  (mcclim-fontconfig:app-font-add-dir #p"/home/elias/prog/maxima-client/fonts/gyre-termes/")
-  (mcclim-fontconfig:app-font-add-dir #p"/home/elias/prog/maxima-client/fonts/latin-modern/")
-  (mcclim-fontconfig:app-font-add-dir #p"/home/elias/prog/maxima-client/fonts/asana-math/")
-  (mcclim-fontconfig:app-font-add-dir #p"/home/elias/prog/maxima-client/fonts/neo-euler/")
-  (mcclim-fontconfig:app-font-add-dir #p"/home/elias/prog/maxima-client/fonts/tex/")
-  (let ((size 20)
-        (fonts (loop
-                 for f in (mcclim-fontconfig:font-list nil '(:family :style :file))
-                 for family = (cdr (assoc :family f))
-                 for style = (cdr (assoc :style f))
-                 for file = (cdr (assoc :file f))
-                 when (alexandria:starts-with-subseq "/home/elias/prog/maxima-client/fonts/tex" file)
-                   collect (list family style file))))
-    (loop
-      for (family style file) in fonts
-      do (format stream "~a/~a/~a " family style (pathname-name file))
-      do (clim:with-text-style (stream (make-instance 'direct-font-text-style
-                                                      :text-family file :text-face family :text-size size))
-           (format stream "ABCIZ abciz 012345 ~c ~c ~c ~c ~c ~c [x] (p) % ~c ~%"
-                   #\GREEK_CAPITAL_LETTER_SIGMA
-                   #\INTEGRAL
-                   #\GREEK_CAPITAL_LETTER_PI
-                   #\GREEK_SMALL_LETTER_PI
-                   #\INFINITY
-                   #\DOT_OPERATOR
-                   #\SQUARE_ROOT)))))
+  (let ((text-style #+nil(clim-extensions:font-face-text-style face 14)
+                    (clim-internals::make-text-style "Noto Serif" "Regular" 19)))
+    (clim:draw-text* stream (format nil "Test content: ~c" #\SQUARE_ROOT) 100 100
+                     :text-style text-style)))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame
