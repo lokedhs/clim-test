@@ -22,7 +22,6 @@
                        editor
                        interactor))))
 
-
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'main-frame
                                             :width 800
