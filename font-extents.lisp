@@ -1,0 +1,85 @@
+(defpackage :font-extents
+  (:use :cl)
+  (:export #:open-foo-frame))
+
+(in-package :font-extents)
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (find-package "LOG4CL")
+    (ql:quickload "log4cl"))
+  (unless (find-package "CLIM")
+    #+sbcl
+    (progn
+      (sb-ext:restrict-compiler-policy 'safety 3)
+      (sb-ext:restrict-compiler-policy 'debug 3))
+    (ql:quickload "mcclim")))
+
+(defmacro dimension-bind ((output-record &key
+                                           ((:width width-sym)) ((:height height-sym))
+                                           ((:x x-sym)) ((:y y-sym))
+                                           ((:right right-sym)) ((:bottom bottom-sym))
+                                           ((:baseline baseline-sym)))
+                          &body body)
+  (alexandria:with-gensyms (width height x y)
+    (alexandria:once-only (output-record)
+      (labels ((make-body ()
+                 `(progn ,@body))
+               (make-baseline ()
+                 (if baseline-sym
+                     `(let ((,baseline-sym (clim-extensions:output-record-baseline ,output-record)))
+                        ,(make-body))
+                     (make-body)))
+               (make-position-form ()
+                 (if (or x-sym y-sym right-sym bottom-sym)
+                     `(multiple-value-bind (,x ,y)
+                          (etypecase ,output-record
+                            (clim:output-record (clim:output-record-position ,output-record))
+                            (clim:region (clim:bounding-rectangle-position ,output-record)))
+                        (declare (ignorable ,x ,y))
+                        (let (,@(if x-sym `((,x-sym ,x)))
+                              ,@(if y-sym `((,y-sym ,y)))
+                              ,@(if right-sym `((,right-sym (+ ,x ,width))))
+                              ,@(if bottom-sym `((,bottom-sym (+ ,y ,height)))))
+                          ,(make-baseline)))
+                     (make-baseline))))
+        (if (or width-sym height-sym right-sym bottom-sym)
+            `(multiple-value-bind (,width ,height)
+                 (clim:rectangle-size ,output-record)
+               (declare (ignorable ,width ,height))
+               (let (,@(if width-sym `((,width-sym ,width)))
+                     ,@(if height-sym `((,height-sym ,height))))
+                 ,(make-position-form)))
+            (make-position-form))))))
+
+(clim:define-application-frame main-frame ()
+  ()
+  (:panes (text-content :application
+                        :display-function 'display-text-content))
+  (:layouts (default (clim:vertically ()
+                       text-content))))
+
+(defun display-text-content (frame stream)
+  (declare (ignore frame))
+  (let ((string "lim")
+        (x-offset 60)
+        (y-offset 120))
+    (clim:with-text-style (stream (clim:make-text-style "MathJax_Main" "Regular" 80))
+      (let ((rec (clim:with-output-to-output-record (stream)
+                   (clim:draw-text* stream string x-offset y-offset))))
+        (clim:stream-add-output-record stream rec)
+        (dimension-bind (rec :x x1 :y y1 :right x2 :bottom y2)
+          (clim:draw-rectangle* stream x1 y1 x2 y2 :filled nil :ink clim:+red+))
+        (multiple-value-bind (width height final-x final-y baseline)
+            (clim:text-size stream string)
+          (declare (ignore final-x final-y))
+          (clim:draw-rectangle* stream x-offset
+                                (- y-offset baseline) (+ x-offset width)
+                                (+ y-offset (- height baseline))
+                                :filled nil :ink clim:+green+)
+          (clim:draw-line* stream x-offset y-offset (+ x-offset width) y-offset :ink clim:+blue+))))))
+
+(defun open-foo-frame ()
+  (let ((frame (clim:make-application-frame 'main-frame
+                                            :width 800
+                                            :height 800)))
+    (clim:run-frame-top-level frame)))
