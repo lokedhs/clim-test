@@ -11,7 +11,8 @@
 
 (in-package :clim-test.window)
 
-(clim:define-presentation-type foo-type ())
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (clim:define-presentation-type foo-type ()))
 
 (clim:define-presentation-method clim:present (obj (type foo-type) stream view &key)
   (format stream "Foo-type: ~a" obj))
