@@ -22,7 +22,8 @@
 
 (defun display-font-size (stream size y)
   (clim:with-text-style (stream (clim:make-text-style "DejaVu Sans" "Book" size))
-    (let ((font-ascent (climb:text-style-ascent (clim:pane-text-style stream) stream)))
+    (let ((font-ascent (climb:text-style-ascent (clim:medium-text-style stream) stream)))
+      (log:info "pane text style = ~s" (clim:medium-text-style stream))
       (clim:draw-text* stream (format nil "Text size: ~s, font ascent: ~s" size font-ascent) 20 y))))
 
 (defun display-content (frame stream)
