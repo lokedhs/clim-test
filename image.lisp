@@ -34,9 +34,6 @@
         (setf (clim:output-record-position rec) (values 10 10))
         (clim:stream-add-output-record stream rec))
       (let ((rec (make-rec "Position 400.5")))
-        ;; Note the additional half-pixel in the y-coordinate. If the
-        ;; y-coordinate is an integer, then everything works
-        ;; correctly.
         (setf (clim:output-record-position rec) (values 10 400.5))
         (clim:stream-add-output-record stream rec))
       (let ((rec (make-rec "Position 800.49999")))
