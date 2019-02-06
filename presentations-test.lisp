@@ -52,8 +52,16 @@
   (format stream "before~%")
   (let ((obj (make-instance 'foo)))
     (clim:with-room-for-graphics (stream :first-quadrant nil :move-cursor t)
-      (clim:stream-present stream obj (clim:presentation-type-of obj) :single-box t :record-type 'special-highlight)))
-  (format stream "after~%"))
+      (let ((rec (clim:with-output-to-output-record (stream)
+                   (clim:stream-present stream obj (clim:presentation-type-of obj)
+                                        :single-box t :record-type 'special-highlight))))
+        (multiple-value-bind (rx1 ry1 rx2 ry2)
+            (clim:bounding-rectangle* rec)
+          (log:info "Output record rect: (~s,~s)-(~s,~s)" rx1 ry1 rx2 ry2)
+          (clim:stream-add-output-record stream rec)
+          (clim:draw-rectangle* stream rx1 ry1 rx2 ry2 :filled nil :ink clim:+blue+)))))
+  (format stream "after~%")
+  (clim:draw-rectangle* stream 10 200 12 202 :filled nil :ink clim:+red+))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'foo-frame :width 900 :height 800)))
@@ -68,16 +76,20 @@
     ((obj 'foo :prompt "Instance"))
   (format t "Object: ~s" obj))
 
+(defvar cl-user::*force-break*)
+
 (defmethod clim:highlight-output-record ((record special-highlight) stream state)
-  (clim:with-identity-transformation (stream)
-    (multiple-value-bind (x1 y1 x2 y2)
-        (clim:bounding-rectangle* record)
-      (let ((medium (clim:sheet-medium stream)))
-        (ecase state
-          (:highlight
-           #+nil
-           (clim:draw-rectangle* medium x1 y1 (1- x2) (1- y2) :filled t :ink clim:+blue+)
-           (clim:repaint-sheet stream (clim:bounding-rectangle record)))
-          (:unhighlight
-           (let ((cl-user::*force-break* nil))
-             (clim:repaint-sheet stream (clim:bounding-rectangle record)))))))))
+  (flet ((r (n)
+           n))
+    (clim:with-identity-transformation (stream)
+      (multiple-value-bind (x1 y1 x2 y2)
+          (clim:bounding-rectangle* record)
+        (log:info "Bounding rectangle: (~s,~s)-(~s,~s)" x1 y1 x2 y2)
+        (let ((medium (clim:sheet-medium stream)))
+          (ecase state
+            (:highlight
+             (clim:draw-rectangle* medium (r x1) (r y1) (r x2) (r y2) :filled t :ink clim:+green+)
+             (clim:replay-output-record (clim:stream-output-history stream) stream (clim:make-rectangle* x1 y1 x2 y2)))
+            (:unhighlight
+             (let ((cl-user::*force-break* nil))
+               (clim:repaint-sheet stream (clim:bounding-rectangle record))))))))))
