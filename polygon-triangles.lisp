@@ -203,4 +203,4 @@ of a pen-stroked polyline, as cl-vectors generates it:
         with colours = (coerce (list clim:+red+ clim:+green+ clim:+blue+ clim:+orange+ clim:+black+) 'simple-vector)
         for colour-index = 0 then (mod (1+ colour-index) (length colours))
         for ((x1 . y1) (x2 . y2) (x3 . y3)) in result
-        do (clim:draw-polygon* stream (list x1 y2 x2 y2 x3 y3) :ink (aref colours colour-index))))))
+        do (clim:draw-polygon* stream (list x1 y1 x2 y2 x3 y3) :ink (aref colours colour-index))))))
