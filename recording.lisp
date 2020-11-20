@@ -63,3 +63,8 @@
 (clim:define-command (add-presentation :name "Add presentation" :menu t :command-table foo-frame)
     ()
   (add-recording (clim:find-pane-named clim:*application-frame* 'interaction-pane)))
+
+(clim:define-command (foo :name "Foo" :menu t :command-table foo-frame)
+    ((a 'string :prompt "Value A")
+     (b 'string :prompt "Value B"))
+  (format t "a=~s b=~s" a b))
