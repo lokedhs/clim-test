@@ -29,6 +29,12 @@
 
 (defun display-content2 (frame stream)
   (declare (ignore frame))
+  #+nil
+  (progn
+    (format stream "Some text here~%")
+    (clim:with-text-size (stream 30)
+      (format stream "This is a larger font~%")))
+  (clim:draw-text* stream "Test message" 50 50 :ink clim:+red+)
   (clim:draw-line* stream 10 100 50 20))
 
 (clim:define-application-frame foo-frame ()
@@ -74,17 +80,17 @@
 
 (defun custom-event-loop ()
   (sdl2:with-init (:everything)
-    (let ((win (sdl2:in-main-thread ()
+    (let* ((win (sdl2:in-main-thread ()
                  (sdl2:create-window :title "Foo"
                                      :w 400 :h 400
-                                     :flags '(:shown :resizable)))))
+                                     :flags '(:shown :resizable))))
+           (renderer (sdl2:create-renderer win nil '(:accelerated))))
       (sdl2:in-main-thread ()
-        (sdl2:with-renderer (renderer win :flags '(:accelerated))
-          (sdl2:set-render-draw-color renderer 255 255 255 255)
-          (sdl2:render-clear renderer)
-          (sdl2:set-render-draw-color renderer 0 0 255 255)
-          (sdl2:render-draw-line renderer 10 10 700 700)
-          (sdl2:render-present renderer))))
+        (sdl2:set-render-draw-color renderer 255 255 255 255)
+        (sdl2:render-clear renderer)
+        (sdl2:set-render-draw-color renderer 0 0 255 255)
+        (sdl2:render-draw-line renderer 10 10 700 700)
+        (sdl2:render-present renderer)))
     (sdl2:in-main-thread ()
       (sdl2:with-sdl-event (event)
         (loop
@@ -94,6 +100,14 @@
           else
             do (log:info "rc=~s  type=~s" rc (sdl2:get-event-type event)))))
     (format t "Finished~%")))
+
+(defun draw-x (x y length)
+  (cairo:move-to (- x length) (- y length))
+  (cairo:line-to (+ x length) (+ y length))
+  (cairo:stroke)
+  (cairo:move-to (- x length) (+ y length))
+  (cairo:line-to (+ x length) (- y length))
+  (cairo:stroke))
 
 (defun paint-cairo (context)
   (cairo:with-context (context)
@@ -108,26 +122,14 @@
     (cairo:stroke)
     (cairo:set-source-rgb 0 0 1)
     (cairo:rectangle 50 50 60 60)
-    (cairo:fill-path))
-  #+nil
-  (cairo:with-context (context)
-    (cairo:set-source-rgb 0 0 0)
-    (cairo:paint)
+    (cairo:fill-path)
     (cairo:set-source-rgb 0 1 0)
-    (cairo:set-line-width 3)
-    (cairo:move-to 0 0)
-    (cairo:line-to 300 0)
-    (cairo:line-to 300 300)
-    (cairo:line-to 0 300)
-    (cairo:line-to 0 0)
-    (cairo:stroke)
-    (cairo:set-source-rgb 1 0 0)
-    (cairo:set-line-width 1)
-    (cairo:arc 0 0 30 0 (* 2 pi))
-    (cairo:stroke)
-    (cairo:set-source-rgb 0 0 1)
-    (cairo:arc 300 300 30 0 (* 2 pi))
-    (cairo:stroke)))
+    (cairo:select-font-face "Source Code Pro" :normal :normal)
+    (cairo:set-font-size 30)
+    (cairo:move-to 100 100)
+    (cairo:show-text "Some text")
+    (draw-x 100 100 10)
+    (log:info "Extents: ~s" (multiple-value-list (cairo:text-extents "Some text")))))
 
 (defun draw-cairo-window (win)
   (sdl2:in-main-thread ()
@@ -165,6 +167,10 @@
           (log:info "expose")
           (draw-cairo-window (sdl2-ffi.functions:sdl-get-window-from-id window-id)))
          (t (log:info "Window event of type: ~s" window-event-type))))
+      (:mousemotion
+       (:window-id window-id :x x :y y :xrel xrel :yrel yrel :state state)
+       (log:info "Mouse: pos:(~s,~s) rel:(~s,~s) state:~s win:~s"
+                 x y xrel yrel state window-id))
       (:keyup
        (:keysym keysym)
        (when (sdl2:scancode= (sdl2:scancode-value keysym) :scancode-escape)
@@ -172,4 +178,3 @@
       (:quit
        ()
        t))))
-
