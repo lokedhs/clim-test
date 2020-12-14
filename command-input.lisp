@@ -122,3 +122,7 @@
                                      :default (make-instance 'bar :value "testmessage")
                                      :insert-default t)))
     (format pane "Got value: ~s" result)))
+
+(clim:define-command (cmd-test-no-args :name "Test With No Args" :menu t :command-table foo-commands)
+    ()
+  (format t "Test output~%"))
