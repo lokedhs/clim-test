@@ -25,22 +25,22 @@
                        text-content))))
 
 
-(defun make-silly-text ()
-  (with-output-to-string (s)
-    (dotimes (x 40)
-      (format s "~c" (code-char (+ (char-code #\a) (random 20)))))))
-
 (defun display-text-content (frame stream)
   (declare (ignore frame))
-  
+  (clim:draw-line* stream 10 10 20 200 :ink clim:+black+)
+  #+nil
   (dotimes (y 10)
     (clim:draw-line* stream
-                     10   (* y 20)
-                     1000  (* y 20)
+                     10 (* y 20)
+                     1000 (* y 20)
                      :ink clim:+red+
                      :line-thickness 4)
+    (clim:draw-rectangle* stream
+                          10 10 100 40
+                          :ink clim:+black+
+                          :filled t)
     (clim:draw-text* stream
-                     (make-silly-text)
+                     "Foo testing"
                      10   (* y 20)
                      :text-size 20
                      :ink (nth (random 3) (list clim:+red+ clim:+blue+ clim:+green+)))))

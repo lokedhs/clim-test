@@ -67,8 +67,7 @@
       ((eq type 'string)
        (log:info "Got string: ~s" object))
       ((and (listp type) (eq (car type) 'clim:command))
-       (clim:execute-frame-command clim:*application-frame* object)
-       nil))))
+       (values object type)))))
 
 (defun open-foo-frame ()
   (let ((frame (clim:make-application-frame 'main-frame
