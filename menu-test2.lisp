@@ -21,13 +21,6 @@
 (clim:define-command-table foo-commands
   :inherit-from (expression-commands))
 
-(defun draw-test-rectangle (stream x y colour)
-  (clim:draw-rectangle* stream x y (+ x 100) (+ y 50) :ink colour :filled nil))
-
-(defun draw-x (stream x y)
-  (clim:draw-line* stream (- x 5) (- y 5) (+ x 5) (+ y 5) :ink clim:+blue+)
-  (clim:draw-line* stream (- x 5) (+ y 5) (+ x 5) (- y 5) :ink clim:+blue+))
-
 (defun display-text-content (frame stream)
   (declare (ignore frame))
   (loop
