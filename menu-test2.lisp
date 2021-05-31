@@ -68,7 +68,7 @@
         (object type event options)
         (clim:accept 'string :stream stream)
       (t
-       (log:trace "other command type: obj=~s type=~s ev=~s options=~s" object type event options)
+       (log:info "other command type: obj=~s type=~s ev=~s options=~s" object type event options)
        (funcall (cdar clim:*input-context*) object type event options)))))
 
 (clim:define-command (foo-quit :name "Quit" :menu t :command-table foo-commands)
