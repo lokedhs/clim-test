@@ -1,3 +1,5 @@
+;;; Demonstration of iss introduced in e3fcfaa22ebe1666fa3b455fcc90b6200b46652e
+
 (defpackage :simple-multi-arg
   (:use :cl)
   (:export #:open-foo-frame))
