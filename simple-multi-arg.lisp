@@ -34,6 +34,7 @@ the first field gets cleared."))
   (:panes (text-content :application
                         :display-function 'display-text-content)
           (interaction-pane :interactor))
+  (:menu-bar menubar-command-table)
   (:command-table (foo-frame :inherit-from (foo-commands)))
   (:layouts (default (clim:vertically ()
                        text-content
@@ -45,7 +46,15 @@ the first field gets cleared."))
                                             :height 600)))
     (clim:run-frame-top-level frame)))
 
-(clim:define-command (show-object-command :name "Foo" :menu t :command-table foo-commands)
+(clim:define-command (foo-command :name "Foo" :menu t :command-table foo-commands)
     ((arg0 'string :prompt "arg0")
      (arg1 'string :prompt "arg1"))
   (format *debug-io* "arg0 is: ~a~%arg1 is: ~a~%" arg0 arg1))
+
+(clim:make-command-table 'menubar-command-table
+                         :errorp nil
+                         :menu '(("File" :menu file-command-table)))
+
+(clim:make-command-table 'file-command-table
+                         :errorp nil
+                         :menu '(("Foo" :command (foo-command))))
