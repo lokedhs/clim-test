@@ -1,4 +1,4 @@
-;;; Demonstration of iss introduced in e3fcfaa22ebe1666fa3b455fcc90b6200b46652e
+;;; Demonstration of issue introduced in e3fcfaa22ebe1666fa3b455fcc90b6200b46652e
 
 (defpackage :simple-multi-arg
   (:use :cl)
@@ -51,6 +51,12 @@ the first field gets cleared."))
      (arg1 'string :prompt "arg1"))
   (format *debug-io* "arg0 is: ~a~%arg1 is: ~a~%" arg0 arg1))
 
+(clim:define-command (bar-command :name "Bar" :menu t :command-table foo-commands)
+    ((arg0 'string :prompt "arg0")
+     &key
+     (key-arg 'string :prompt "Key arg"))
+  (format *debug-io* "arg0=~s key-arg=~s~%" arg0 key-arg))
+
 (clim:make-command-table 'menubar-command-table
                          :errorp nil
                          :menu '(("File" :menu file-command-table)))
@@ -58,3 +64,12 @@ the first field gets cleared."))
 (clim:make-command-table 'file-command-table
                          :errorp nil
                          :menu '(("Foo" :command (foo-command))))
+
+(defmethod clim:read-frame-command :around ((frame foo-frame) &key (stream *standard-input*))
+  (declare (ignore stream))
+  (log:info "Before read frame command")
+  (handler-bind ((t (lambda (condition)
+                      (log:info "Got condition: ~s" condition))))
+    (let ((res (multiple-value-list (call-next-method))))
+      (log:info "Result: ~s" res)
+      (apply #'values res))))
